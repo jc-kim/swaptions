@@ -17,15 +17,6 @@
 #include <pthread.h>
 #define MAX_THREAD 1024
 
-#ifdef TBB_VERSION
-#include "tbb/task_scheduler_init.h"
-#include "tbb/blocked_range.h"
-#include "tbb/parallel_for.h"
-#include "tbb/cache_aligned_allocator.h"
-tbb::cache_aligned_allocator<FTYPE> memory_ftype;
-tbb::cache_aligned_allocator<parm> memory_parm;
-#define TBB_GRAINSIZE 1
-#endif // TBB_VERSION
 #endif //ENABLE_THREADS
 
 
@@ -46,59 +37,29 @@ FTYPE *dSumSimSwaptionPrice_global_ptr;
 FTYPE *dSumSquareSimSwaptionPrice_global_ptr;
 int chunksize;
 
-
-#ifdef TBB_VERSION
-struct Worker {
-  Worker(){}
-  void operator()(const tbb::blocked_range<int> &range) const {
-    FTYPE pdSwaptionPrice[2];
-    int begin = range.begin();
-    int end   = range.end();
-
-    for(int i=begin; i!=end; i++) {
-      int iSuccess = HJM_Swaption_Blocking(pdSwaptionPrice,  swaptions[i].dStrike, 
-					   swaptions[i].dCompounding, swaptions[i].dMaturity, 
-					   swaptions[i].dTenor, swaptions[i].dPaymentInterval,
-					   swaptions[i].iN, swaptions[i].iFactors, swaptions[i].dYears, 
-					   swaptions[i].pdYield, swaptions[i].ppdFactors,
-					   100, NUM_TRIALS, BLOCK_SIZE, 0);
-      assert(iSuccess == 1);
-      swaptions[i].dSimSwaptionMeanPrice = pdSwaptionPrice[0];
-      swaptions[i].dSimSwaptionStdError = pdSwaptionPrice[1];
-
-    }
-     
-
-
-  }
-};
-
-#endif //TBB_VERSION
-
-
 void * worker(void *arg){
-  int tid = *((int *)arg);
-  FTYPE pdSwaptionPrice[2];
+	int tid = *((int *)arg);
+	FTYPE pdSwaptionPrice[2];
 
-  int chunksize = nSwaptions/nThreads;
-  int beg = tid*chunksize;
-  int end = (tid+1)*chunksize;
-  if(tid == nThreads -1 )
-    end = nSwaptions;
+	int chunksize = nSwaptions/nThreads;
+	int beg = tid*chunksize;
+	int end = (tid+1)*chunksize;
+	if(tid == nThreads -1 )
+		end = nSwaptions;
 
-  for(int i=beg; i < end; i++) {
-     int iSuccess = HJM_Swaption_Blocking(pdSwaptionPrice,  swaptions[i].dStrike, 
-                                       swaptions[i].dCompounding, swaptions[i].dMaturity, 
-                                       swaptions[i].dTenor, swaptions[i].dPaymentInterval,
-                                       swaptions[i].iN, swaptions[i].iFactors, swaptions[i].dYears, 
-                                       swaptions[i].pdYield, swaptions[i].ppdFactors,
-                                       100, NUM_TRIALS, BLOCK_SIZE, 0);
-     assert(iSuccess == 1);
-     swaptions[i].dSimSwaptionMeanPrice = pdSwaptionPrice[0];
-     swaptions[i].dSimSwaptionStdError = pdSwaptionPrice[1];
-   }
+	for(int i=beg; i < end; i++) {
+		int iSuccess = HJM_Swaption_Blocking(pdSwaptionPrice,  swaptions[i].dStrike, 
+				swaptions[i].dCompounding, swaptions[i].dMaturity, 
+				swaptions[i].dTenor, swaptions[i].dPaymentInterval,
+				swaptions[i].iN, swaptions[i].iFactors, swaptions[i].dYears, 
+				swaptions[i].pdYield, swaptions[i].ppdFactors,
+				100, NUM_TRIALS, BLOCK_SIZE, 0);
+		assert(iSuccess == 1);
+		swaptions[i].dSimSwaptionMeanPrice = pdSwaptionPrice[0];
+		swaptions[i].dSimSwaptionStdError = pdSwaptionPrice[1];
+	}
 
-   return NULL;    
+	return NULL;    
 }
 
 
@@ -112,48 +73,44 @@ int main(int argc, char *argv[])
 {
 	int iSuccess = 0;
 	int i,j;
-	
+
 	FTYPE **factors=NULL;
 
 #ifdef PARSEC_VERSION
 #define __PARSEC_STRING(x) #x
 #define __PARSEC_XSTRING(x) __PARSEC_STRING(x)
-        printf("PARSEC Benchmark Suite Version "__PARSEC_XSTRING(PARSEC_VERSION)"\n"); 
+	printf("PARSEC Benchmark Suite Version "__PARSEC_XSTRING(PARSEC_VERSION)"\n"); 
 	fflush(NULL);
 #else
-        printf("PARSEC Benchmark Suite\n");
+	printf("PARSEC Benchmark Suite\n");
 	fflush(NULL);
 #endif //PARSEC_VERSION
 #ifdef ENABLE_PARSEC_HOOKS
 	__parsec_bench_begin(__parsec_swaptions);
 #endif
-	
-        if(argc == 1)
-        {
-          fprintf(stderr," usage: \n\t-ns [number of swaptions (should be > number of threads]\n\t-sm [number of simulations]\n\t-nt [number of threads]\n"); 
-          exit(1);
-        }
 
-        for (int j=1; j<argc; j++) {
-	  if (!strcmp("-sm", argv[j])) {NUM_TRIALS = atoi(argv[++j]);}
-	  else if (!strcmp("-nt", argv[j])) {nThreads = atoi(argv[++j]);} 
-	  else if (!strcmp("-ns", argv[j])) {nSwaptions = atoi(argv[++j]);} 
-          else {
-            fprintf(stderr," usage: \n\t-ns [number of swaptions (should be > number of threads]\n\t-sm [number of simulations]\n\t-nt [number of threads]\n"); 
-          }
-        }
+	if(argc == 1)
+	{
+		fprintf(stderr," usage: \n\t-ns [number of swaptions (should be > number of threads]\n\t-sm [number of simulations]\n\t-nt [number of threads]\n"); 
+		exit(1);
+	}
 
-        if(nSwaptions < nThreads) {
-	  nSwaptions = nThreads; 
-        }
+	for (int j=1; j<argc; j++) {
+		if (!strcmp("-sm", argv[j])) {NUM_TRIALS = atoi(argv[++j]);}
+		else if (!strcmp("-nt", argv[j])) {nThreads = atoi(argv[++j]);} 
+		else if (!strcmp("-ns", argv[j])) {nSwaptions = atoi(argv[++j]);} 
+		else {
+			fprintf(stderr," usage: \n\t-ns [number of swaptions (should be > number of threads]\n\t-sm [number of simulations]\n\t-nt [number of threads]\n"); 
+		}
+	}
 
-        printf("Number of Simulations: %d,  Number of threads: %d Number of swaptions: %d\n", NUM_TRIALS, nThreads, nSwaptions);
+	if(nSwaptions < nThreads) {
+		nSwaptions = nThreads; 
+	}
+
+	printf("Number of Simulations: %d,  Number of threads: %d Number of swaptions: %d\n", NUM_TRIALS, nThreads, nSwaptions);
 
 #ifdef ENABLE_THREADS
-
-#ifdef TBB_VERSION
-	tbb::task_scheduler_init init(nThreads);
-#else
 	pthread_t      *threads;
 	pthread_attr_t  pthread_custom_attr;
 
@@ -164,8 +121,6 @@ int main(int argc, char *argv[])
 	}
 	threads = (pthread_t *) malloc(nThreads * sizeof(pthread_t));
 	pthread_attr_init(&pthread_custom_attr);
-
-#endif // TBB_VERSION
 
 	if ((nThreads < 1) || (nThreads > MAX_THREAD))
 	{
@@ -181,7 +136,7 @@ int main(int argc, char *argv[])
 	}
 #endif //ENABLE_THREADS
 
-        // initialize input dataset
+	// initialize input dataset
 	factors = dmatrix(0, iFactors-1, 0, iN-2);
 	//the three rows store vol data for the three factors
 	factors[0][0]= .01;
@@ -216,38 +171,34 @@ int main(int argc, char *argv[])
 	factors[2][7]= -.000750;
 	factors[2][8]= -.001000;
 	factors[2][9]= -.001250;
-	
-        // setting up multiple swaptions
-        swaptions = 
-#ifdef TBB_VERSION
-	  (parm *)memory_parm.allocate(sizeof(parm)*nSwaptions, NULL);
-#else
-	  (parm *)malloc(sizeof(parm)*nSwaptions);
-#endif
 
-        int k;
-        for (i = 0; i < nSwaptions; i++) {
-          swaptions[i].Id = i;
-          swaptions[i].iN = iN;
-          swaptions[i].iFactors = iFactors;
-          swaptions[i].dYears = dYears;
+	// setting up multiple swaptions
+	swaptions = 
+	(parm *)malloc(sizeof(parm)*nSwaptions);
 
-          swaptions[i].dStrike =  (double)i / (double)nSwaptions;
-          swaptions[i].dCompounding =  0;
-          swaptions[i].dMaturity =  1;
-          swaptions[i].dTenor =  2.0;
-          swaptions[i].dPaymentInterval =  1.0;
+	int k;
+	for (i = 0; i < nSwaptions; i++) {
+		swaptions[i].Id = i;
+		swaptions[i].iN = iN;
+		swaptions[i].iFactors = iFactors;
+		swaptions[i].dYears = dYears;
 
-          swaptions[i].pdYield = dvector(0,iN-1);;
-          swaptions[i].pdYield[0] = .1;
-          for(j=1;j<=swaptions[i].iN-1;++j)
-            swaptions[i].pdYield[j] = swaptions[i].pdYield[j-1]+.005;
+		swaptions[i].dStrike =  (double)i / (double)nSwaptions;
+		swaptions[i].dCompounding =  0;
+		swaptions[i].dMaturity =  1;
+		swaptions[i].dTenor =  2.0;
+		swaptions[i].dPaymentInterval =  1.0;
 
-          swaptions[i].ppdFactors = dmatrix(0, swaptions[i].iFactors-1, 0, swaptions[i].iN-2);
-          for(k=0;k<=swaptions[i].iFactors-1;++k)
-                 for(j=0;j<=swaptions[i].iN-2;++j)
-                        swaptions[i].ppdFactors[k][j] = factors[k][j];
-        }
+		swaptions[i].pdYield = dvector(0,iN-1);;
+		swaptions[i].pdYield[0] = .1;
+		for(j=1;j<=swaptions[i].iN-1;++j)
+			swaptions[i].pdYield[j] = swaptions[i].pdYield[j-1]+.005;
+
+		swaptions[i].ppdFactors = dmatrix(0, swaptions[i].iFactors-1, 0, swaptions[i].iN-2);
+		for(k=0;k<=swaptions[i].iFactors-1;++k)
+			for(j=0;j<=swaptions[i].iN-2;++j)
+				swaptions[i].ppdFactors[k][j] = factors[k][j];
+	}
 
 
 	// **********Calling the Swaption Pricing Routine*****************
@@ -256,25 +207,16 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef ENABLE_THREADS
-
-#ifdef TBB_VERSION
-	Worker w;
-	tbb::parallel_for(tbb::blocked_range<int>(0,nSwaptions,TBB_GRAINSIZE),w);
-#else
-	
 	int threadIDs[nThreads];
-        for (i = 0; i < nThreads; i++) {
-          threadIDs[i] = i;
-          pthread_create(&threads[i], &pthread_custom_attr, worker, &threadIDs[i]);
-        }
-        for (i = 0; i < nThreads; i++) {
-          pthread_join(threads[i], NULL);
-        }
+	for (i = 0; i < nThreads; i++) {
+		threadIDs[i] = i;
+		pthread_create(&threads[i], &pthread_custom_attr, worker, &threadIDs[i]);
+	}
+	for (i = 0; i < nThreads; i++) {
+		pthread_join(threads[i], NULL);
+	}
 
 	free(threads);
-
-#endif // TBB_VERSION	
-
 #else
 	int threadID=0;
 	worker(&threadID);
@@ -284,23 +226,18 @@ int main(int argc, char *argv[])
 	__parsec_roi_end();
 #endif
 
-        for (i = 0; i < nSwaptions; i++) {
-          fprintf(stderr,"Swaption%d: [SwaptionPrice: %.10lf StdError: %.10lf] \n", 
-                   i, swaptions[i].dSimSwaptionMeanPrice, swaptions[i].dSimSwaptionStdError);
+	for (i = 0; i < nSwaptions; i++) {
+		fprintf(stderr,"Swaption%d: [SwaptionPrice: %.10lf StdError: %.10lf] \n", 
+				i, swaptions[i].dSimSwaptionMeanPrice, swaptions[i].dSimSwaptionStdError);
 
-        }
+	}
 
-        for (i = 0; i < nSwaptions; i++) {
-          free_dvector(swaptions[i].pdYield, 0, swaptions[i].iN-1);
-	  free_dmatrix(swaptions[i].ppdFactors, 0, swaptions[i].iFactors-1, 0, swaptions[i].iN-2);
-        }
+	for (i = 0; i < nSwaptions; i++) {
+		free_dvector(swaptions[i].pdYield, 0, swaptions[i].iN-1);
+		free_dmatrix(swaptions[i].ppdFactors, 0, swaptions[i].iFactors-1, 0, swaptions[i].iN-2);
+	}
 
-
-#ifdef TBB_VERSION
-	memory_parm.deallocate(swaptions, sizeof(parm));
-#else
-        free(swaptions);
-#endif // TBB_VERSION
+	free(swaptions);
 
 	//***********************************************************
 
