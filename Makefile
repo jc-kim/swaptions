@@ -7,7 +7,23 @@ ifdef version
   ifeq "$(version)" "pthreads" 
     DEF := $(DEF) -DENABLE_THREADS
     CXXFLAGS := $(CXXFLAGS) -pthread
-  endif
+	endif
+	ifeq "$(version)" "cpu"
+		DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_CPU
+		CXXFLAGS := $(CXXFLAGS) -lOpenCL
+	endif
+	ifeq "$(version)" "gpu"
+		DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_GPU
+		CXXFLAGS := $(CXXFLAGS) -lOpenCL
+	endif
+	ifeq "$(version)" "mpi"
+		CXX := mpig++
+		DEF := $(DEF) -DENABLE_OPENCL -DENABLE_MPI
+	endif
+	ifeq "$(version)" "snucl"
+		DEF := $(DEF) -DENABLE_OPENCL -DENABLE_SNUCL
+		CXXFLAGS := $(CXXFLAGS) -lOpenCL
+	endif
 endif
 
 OBJS= CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o icdf.o \
