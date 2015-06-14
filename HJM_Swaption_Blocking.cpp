@@ -14,8 +14,8 @@
 int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will store simulation results in the form:
     //Swaption Price
     //Swaption Standard Error
-    //Swaption Parameters 
-    FTYPE dStrike,				  
+    //Swaption Parameters
+    FTYPE dStrike,
     FTYPE dCompounding,     //Compounding convention used for quoting the strike (0 => continuous,
     //0.5 => semi-annual, 1 => annual).
     FTYPE dMaturity,	      //Maturity of the swaption (time to expiration)
@@ -23,13 +23,13 @@ int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will stor
     FTYPE dPaymentInterval, //frequency of swap payments e.g. dPaymentInterval = 0.5 implies a swap payment every half
     //year
     //HJM Framework Parameters (please refer HJM.cpp for explanation of variables and functions)
-    int iN,						
-    int iFactors, 
-    FTYPE dYears, 
-    FTYPE *pdYield, 
+    int iN,
+    int iFactors,
+    FTYPE dYears,
+    FTYPE *pdYield,
     FTYPE **ppdFactors,
     //Simulation Parameters
-    long iRndSeed, 
+    long iRndSeed,
     long lTrials,
     int BLOCKSIZE, int tid)
 
@@ -136,7 +136,8 @@ int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will stor
   //Simulations begin:
   for(l = 0; l < lTrials; l += BLOCKSIZE) {
     //For each trial a new HJM Path is generated
-    iSuccess = HJM_SimPath_Forward_Blocking(ppdHJMPath, iN, iFactors, dYears, pdForward, pdTotalDrift,ppdFactors, &iRndSeed, BLOCKSIZE); /* GC: 51% of the time goes here */
+    /* GC: 51% of the time goes here */
+    iSuccess = HJM_SimPath_Forward_Blocking(ppdHJMPath, iN, iFactors, dYears, pdForward, pdTotalDrift, ppdFactors, &iRndSeed, BLOCKSIZE);
     if(iSuccess != 1) return iSuccess;
 
     //now we compute the discount factor vector
@@ -145,7 +146,9 @@ int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will stor
         pdDiscountingRatePath[BLOCKSIZE*i + b] = ppdHJMPath[i][b];
       }
     }
-    iSuccess = Discount_Factors_Blocking(pdPayoffDiscountFactors, iN, dYears, pdDiscountingRatePath, BLOCKSIZE); /* 15% of the time goes here */
+
+    /* 15% of the time goes here */
+    iSuccess = Discount_Factors_Blocking(pdPayoffDiscountFactors, iN, dYears, pdDiscountingRatePath, BLOCKSIZE);
     if(iSuccess != 1) return iSuccess;
 
     //now we compute discount factors along the swap path
@@ -154,12 +157,14 @@ int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will stor
         pdSwapRatePath[i*BLOCKSIZE + b] = ppdHJMPath[iSwapStartTimeIndex][i*BLOCKSIZE + b];
       }
     }
+
     iSuccess = Discount_Factors_Blocking(pdSwapDiscountFactors, iSwapVectorLength, dSwapVectorYears, pdSwapRatePath, BLOCKSIZE);
     if(iSuccess != 1) return iSuccess;
 
     // Simulation
     for(b = 0; b < BLOCKSIZE; b++){
       dFixedLegValue = 0.0;
+
       for(i = 0; i < iSwapVectorLength; i++) dFixedLegValue += pdSwapPayoffs[i] * pdSwapDiscountFactors[i*BLOCKSIZE + b];
       dSwaptionPayoff = dMax(dFixedLegValue - 1.0, 0);
 

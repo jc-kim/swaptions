@@ -30,6 +30,7 @@ int HJM_SimPath_Forward_Blocking(FTYPE **ppdHJMPath,	//Matrix that stores genera
 
   int iSuccess = 0;
   int i, j, l; //looping variables
+  int b;
   FTYPE **pdZ; //vector to store random normals
   FTYPE **randZ; //vector to store random normals
   FTYPE dTotalShock; //total shock by which the forward curve is hit at (t, T-t)
@@ -44,19 +45,19 @@ int HJM_SimPath_Forward_Blocking(FTYPE **ppdHJMPath,	//Matrix that stores genera
   // t=0 forward curve stored iN first row of ppdHJMPath
   // At time step 0: insert expected drift 
   // rest reset to 0
-  for(int b = 0; b < BLOCKSIZE; b++){
+  for(b = 0; b < BLOCKSIZE; b++){
     for(j = 0; j < iN; j++){
       ppdHJMPath[0][BLOCKSIZE*j + b] = pdForward[j]; 
 
-      for(i = 1; i < iN; i++)
-        ppdHJMPath[i][BLOCKSIZE*j + b]=0; //initializing HJMPath to zero
+      //initializing HJMPath to zero
+      for(i = 1; i < iN; i++) ppdHJMPath[i][BLOCKSIZE*j + b] = 0;
     }
   }
 
   // sequentially generating random numbers
   //compute random number in exact same sequence
   /* 10% of the total executition time */
-  for(int b = 0; b < BLOCKSIZE; b++){
+  for(b = 0; b < BLOCKSIZE; b++){
     for(j = 1; j < iN; j++){
       for(l = 0; l < iFactors; l++){
         randZ[l][BLOCKSIZE*j + b] = RanUnif(lRndSeed);
@@ -69,22 +70,21 @@ int HJM_SimPath_Forward_Blocking(FTYPE **ppdHJMPath,	//Matrix that stores genera
   serialB(pdZ, randZ, BLOCKSIZE, iN, iFactors);
 
   // Generation of HJM Path1
-  for(int b = 0; b < BLOCKSIZE; b++){ // b is the blocks
+  for(b = 0; b < BLOCKSIZE; b++){ // b is the blocks
     for(j = 1; j < iN; j++) { // j is the timestep
       for(l = 0; l < iN - j; l++){ // l is the future steps
         dTotalShock = 0;
 
-        for (i = 0; i < iFactors; i++){// i steps through the stochastic factors
-          dTotalShock += ppdFactors[i][l]* pdZ[i][BLOCKSIZE*j + b];		  		
-        }
+        // i steps through the stochastic factors
+        for (i = 0; i < iFactors; i++) dTotalShock += ppdFactors[i][l] * pdZ[i][BLOCKSIZE * j + b];
 
-        ppdHJMPath[j][BLOCKSIZE*l+b] = ppdHJMPath[j-1][BLOCKSIZE*(l+1)+b] + pdTotalDrift[l]*ddelt + sqrt_ddelt*dTotalShock;
+        ppdHJMPath[j][BLOCKSIZE * l + b] = ppdHJMPath[j - 1][BLOCKSIZE * (l + 1) + b] + pdTotalDrift[l] * ddelt + sqrt_ddelt * dTotalShock;
         //as per formula
       }
     }
   }
 
-  free_dmatrix(pdZ, 0, iFactors - 1, 0, iN*BLOCKSIZE - 1);
-  free_dmatrix(randZ, 0, iFactors - 1, 0, iN*BLOCKSIZE - 1);
+  free_dmatrix(pdZ, 0, iFactors - 1, 0, iN * BLOCKSIZE - 1);
+  free_dmatrix(randZ, 0, iFactors - 1, 0, iN * BLOCKSIZE - 1);
   return 1;
 }
