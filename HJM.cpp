@@ -122,12 +122,10 @@ int Discount_Factors_Blocking(FTYPE *pdDiscountFactors,
     FTYPE dYears, 
     FTYPE *pdRatePath,
     int BLOCKSIZE) {
-  int i,j,b;
-  FTYPE ddelt;			//HJM time-step length
-  ddelt = (FTYPE)(dYears/iN);
+  int i, j, b;
+  FTYPE ddelt = (FTYPE)(dYears/iN); //HJM time-step length
 
-  FTYPE *pdexpRes;
-  pdexpRes = dvector(0,(iN-1)*BLOCKSIZE-1);
+  FTYPE *pdexpRes = dvector(0, (iN - 1) * BLOCKSIZE -1);
 
   //precompute the exponientials
   for (j = 0; j < (iN - 1) * BLOCKSIZE; j++) pdexpRes[j] = -pdRatePath[j] * ddelt;
