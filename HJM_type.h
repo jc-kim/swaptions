@@ -2,10 +2,6 @@
 #define __TYPE__
 //#define DEBUG
 
-#if defined(BASELINE) && defined(ENABLE_SSE4)
-#error BASELINE and ENABLE_SSE4 are mutually exclusive
-#endif
-
 #define FTYPE double
 #define BLOCK_SIZE 16 // Blocking to allow better caching
 

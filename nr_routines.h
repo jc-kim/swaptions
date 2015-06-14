@@ -1,8 +1,6 @@
 #include "HJM_type.h"
 #include <string>
 
-int      choldc(FTYPE **a, int n);
-void     gaussj(FTYPE **a, int n, FTYPE **b, int m);
 void     nrerror(std::string error_text);
 int      *ivector(long nl, long nh);
 void     free_ivector(int *v, long nl, long nh);

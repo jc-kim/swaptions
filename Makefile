@@ -4,7 +4,7 @@ INCLUDE =
 EXEC = swaptions 
 ALL_EXEC = swaptions run_cpu run_gpu run_mpi run_snucl
 
-OBJS= CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o icdf.o \
+OBJS= CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 	HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
 	HJM_Securities.o
 
