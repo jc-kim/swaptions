@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string>
 
 #include "nr_routines.h"
 #include "HJM_type.h"
@@ -96,11 +97,11 @@ void gaussj(FTYPE **a, int n, FTYPE **b, int m)
 
 
 /**********************************************************************/
-void nrerror( char error_text[] )
+void nrerror(std::string error_text )
 {
   // Numerical Recipes standard error handler
   fprintf( stderr,"Numerical Recipes run-time error...\n" );
-  fprintf( stderr,"%s\n",error_text );
+  fprintf( stderr,"%s\n",error_text.c_str() );
   fprintf( stderr,"...now exiting to system...\n" );
   exit(1);
 
