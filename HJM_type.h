@@ -22,7 +22,7 @@ typedef struct
   FTYPE dYears;
   int iFactors;
   FTYPE *pdYield;
-  FTYPE **ppdFactors;
+  FTYPE *ppdFactors;
 } parm;
 
 #endif //__TYPE__

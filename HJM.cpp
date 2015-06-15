@@ -14,28 +14,25 @@
 #include "HJM_type.h"
 
 int HJM_Yield_to_Forward(FTYPE *pdForward, int iN, FTYPE *pdYield);
-int HJM_Drifts(FTYPE *pdTotalDrift, FTYPE **ppdDrifts, int iN, int iFactors, FTYPE dYears, FTYPE **ppdFactors);
+int HJM_Drifts(FTYPE *pdTotalDrift, FTYPE *ppdDrifts, int iN, int iFactors, FTYPE dYears, FTYPE *ppdFactors);
 
 int HJM_Yield_to_Forward (FTYPE *pdForward,	//Forward curve to be outputted
     int iN,				//Number of time-steps
     FTYPE *pdYield)		//Input yield curve 
 {
-  //This function computes forward rates from supplied yield rates.
   int i;
-
-  //forward curve computation
   pdForward[0] = pdYield[0];
-  for(i = 1; i < iN; i++) pdForward[i] = (i + 1) * pdYield[i] - i * pdYield[i - 1];	//as per formula
+  for(i = 1; i < iN; i++) pdForward[i] = (i + 1) * pdYield[i] - i * pdYield[i - 1];
 
   return 1;
 }
 
 int HJM_Drifts(FTYPE *pdTotalDrift,	//Output vector that stores the total drift correction for each maturity
-    FTYPE **ppdDrifts,		//Output matrix that stores drift correction for each factor for each maturity
+    FTYPE *ppdDrifts,		//Output matrix that stores drift correction for each factor for each maturity
     int iN, 
     int iFactors,
     FTYPE dYears,
-    FTYPE **ppdFactors)		//Input factor volatilities
+    FTYPE *ppdFactors)		//Input factor volatilities
 {
   //This function computes drift corrections required for each factor for each maturity based on given factor volatilities
 
@@ -45,26 +42,26 @@ int HJM_Drifts(FTYPE *pdTotalDrift,	//Output vector that stores the total drift 
 
   //computation of factor drifts for shortest maturity
   for (i = 0; i < iFactors; i++)
-    ppdDrifts[i][0] = 0.5*ddelt*(ppdFactors[i][0])*(ppdFactors[i][0]);
+    ppdDrifts[i * (iN - 1)] = 0.5 * ddelt * (ppdFactors[i * (iN - 1)]) * (ppdFactors[i * (iN - 1)]);
 
   //computation of factor drifts for other maturities
   for (i = 0; i < iFactors;i++)
     for (j = 1; j < iN - 1; j++)
     {
-      ppdDrifts[i][j] = 0;
-      for(l = 0; l < j; l++) ppdDrifts[i][j] -= ppdDrifts[i][l];
+      ppdDrifts[i * (iN - 1) + j] = 0;
+      for(l = 0; l < j; l++) ppdDrifts[i * (iN - 1) + j] -= ppdDrifts[i * (iN - 1) + l];
 
       dSumVol=0;
-      for(l = 0; l <= j; l++) dSumVol += ppdFactors[i][l];
+      for(l = 0; l <= j; l++) dSumVol += ppdFactors[i * (iN - 1) + l];
 
-      ppdDrifts[i][j] += 0.5 * ddelt * dSumVol * dSumVol;
+      ppdDrifts[i * (iN - 1) + j] += 0.5 * ddelt * dSumVol * dSumVol;
     }
 
   //computation of total drifts for all maturities
   for(i = 0; i < iN - 1; i++)
   {
     pdTotalDrift[i]=0;
-    for(j = 0; j < iFactors; j++) pdTotalDrift[i] += ppdDrifts[j][i];
+    for(j = 0; j < iFactors; j++) pdTotalDrift[i] += ppdDrifts[j * (iN - 1) + i];
   }
 
   return 1;
@@ -74,11 +71,10 @@ int Discount_Factors_Blocking(FTYPE *pdDiscountFactors,
     int iN, 
     FTYPE dYears, 
     FTYPE *pdRatePath,
-    int BLOCKSIZE) {
+    int BLOCKSIZE,
+		FTYPE *pdexpRes) {
   int i, j, b;
   FTYPE ddelt = (FTYPE)(dYears/iN); //HJM time-step length
-
-  FTYPE *pdexpRes = dvector((iN - 1) * BLOCKSIZE);
 
   //precompute the exponientials
   for (j = 0; j < (iN - 1) * BLOCKSIZE; j++) pdexpRes[j] = -pdRatePath[j] * ddelt;
@@ -95,6 +91,5 @@ int Discount_Factors_Blocking(FTYPE *pdDiscountFactors,
     }
   } 
 
-  free_dvector(pdexpRes);
   return 1;
 }

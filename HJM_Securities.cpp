@@ -21,7 +21,7 @@
 int NUM_TRIALS = DEFAULT_NUM_TRIALS;
 int nThreads = 1;
 int nSwaptions = 1;
-int iN = 11; 
+int iN = 11;
 FTYPE dYears = 5.5; 
 int iFactors = 3; 
 parm *swaptions;
@@ -35,13 +35,45 @@ void* worker(void *arg){
   int end = (tid == nThreads - 1 ? nSwaptions : (tid + 1) * chunksize);
 
   for(int i = beg; i < end; i++) {
-    int iSuccess = HJM_Swaption_Blocking(pdSwaptionPrice,  swaptions[i].dStrike, 
-        swaptions[i].dCompounding, swaptions[i].dMaturity, 
-        swaptions[i].dTenor, swaptions[i].dPaymentInterval,
-        swaptions[i].iN, swaptions[i].iFactors, swaptions[i].dYears, 
-        swaptions[i].pdYield, swaptions[i].ppdFactors,
-        100, NUM_TRIALS, BLOCK_SIZE, 0);
-    assert(iSuccess == 1);
+		FTYPE ddelt = (FTYPE)(swaptions[i].dYears / swaptions[i].iN);
+		int iSwapVectorLength = (int)(swaptions[i].iN - swaptions[i].dMaturity / ddelt + 0.5);
+		FTYPE *ppdHJMPath = dmatrix(iN, iN * BLOCK_SIZE),
+					*pdForward = dvector(iN),
+					*ppdDrifts = dmatrix(iFactors, iN - 1),
+					*pdTotalDrift = dvector(iN - 1);
+		FTYPE *pdDiscountingRatePath = dvector(iN * BLOCK_SIZE),
+					*pdPayoffDiscountFactors = dvector(iN * BLOCK_SIZE),
+					*pdSwapRatePath = dvector(iSwapVectorLength * BLOCK_SIZE),
+					*pdSwapDiscountFactors = dvector(iSwapVectorLength * BLOCK_SIZE),
+					*pdSwapPayoffs = dvector(iSwapVectorLength);
+		FTYPE *pdZ = dmatrix(iFactors, iN * BLOCK_SIZE),
+					*randZ = dmatrix(iFactors, iN * BLOCK_SIZE);
+		FTYPE *pdexpRes = dvector((iN - 1) * BLOCK_SIZE);
+
+    int iSuccess = HJM_Swaption_Blocking(pdSwaptionPrice, swaptions[i].dStrike,
+			swaptions[i].dCompounding, swaptions[i].dMaturity,
+			swaptions[i].dTenor, swaptions[i].dPaymentInterval,
+			swaptions[i].iN, swaptions[i].iFactors, swaptions[i].dYears,
+			swaptions[i].pdYield, swaptions[i].ppdFactors,
+			100, NUM_TRIALS, BLOCK_SIZE, 0,
+			ppdHJMPath, pdForward, ppdDrifts, pdTotalDrift,
+			pdDiscountingRatePath, pdPayoffDiscountFactors, pdSwapRatePath, pdSwapDiscountFactors, pdSwapPayoffs,
+			pdZ, randZ, pdexpRes);
+		assert(iSuccess == 1);
+
+		free(ppdHJMPath);
+		free(pdForward);
+		free(ppdDrifts);
+		free(pdTotalDrift);
+		free(pdDiscountingRatePath);
+		free(pdPayoffDiscountFactors);
+		free(pdSwapRatePath);
+		free(pdSwapDiscountFactors);
+		free(pdSwapPayoffs);
+		free(pdZ);
+		free(randZ);
+		free(pdexpRes);
+
     swaptions[i].dSimSwaptionMeanPrice = pdSwaptionPrice[0];
     swaptions[i].dSimSwaptionStdError = pdSwaptionPrice[1];
   }
@@ -70,47 +102,47 @@ void parseOpt(int argc, char** argv) {
   }
 }
 
-FTYPE** getFactors() {
+FTYPE* getFactors() {
   // initialize input dataset
-  FTYPE** factors = dmatrix(iFactors, iN - 1);
+  FTYPE* factors = dmatrix(iFactors, iN - 1);
   //the three rows store vol data for the three factors
-  factors[0][0]= .01;
-  factors[0][1]= .01;
-  factors[0][2]= .01;
-  factors[0][3]= .01;
-  factors[0][4]= .01;
-  factors[0][5]= .01;
-  factors[0][6]= .01;
-  factors[0][7]= .01;
-  factors[0][8]= .01;
-  factors[0][9]= .01;
+  factors[0]= .01;
+  factors[1]= .01;
+  factors[2]= .01;
+  factors[3]= .01;
+  factors[4]= .01;
+  factors[5]= .01;
+  factors[6]= .01;
+  factors[7]= .01;
+  factors[8]= .01;
+  factors[9]= .01;
 
-  factors[1][0]= .009048;
-  factors[1][1]= .008187;
-  factors[1][2]= .007408;
-  factors[1][3]= .006703;
-  factors[1][4]= .006065;
-  factors[1][5]= .005488;
-  factors[1][6]= .004966;
-  factors[1][7]= .004493;
-  factors[1][8]= .004066;
-  factors[1][9]= .003679;
+  factors[(iN - 1)]= .009048;
+  factors[(iN - 1) + 1]= .008187;
+  factors[(iN - 1) + 2]= .007408;
+  factors[(iN - 1) + 3]= .006703;
+  factors[(iN - 1) + 4]= .006065;
+  factors[(iN - 1) + 5]= .005488;
+  factors[(iN - 1) + 6]= .004966;
+  factors[(iN - 1) + 7]= .004493;
+  factors[(iN - 1) + 8]= .004066;
+  factors[(iN - 1) + 9]= .003679;
 
-  factors[2][0]= .001000;
-  factors[2][1]= .000750;
-  factors[2][2]= .000500;
-  factors[2][3]= .000250;
-  factors[2][4]= .000000;
-  factors[2][5]= -.000250;
-  factors[2][6]= -.000500;
-  factors[2][7]= -.000750;
-  factors[2][8]= -.001000;
-  factors[2][9]= -.001250;
+  factors[(iN - 1) * 2]= .001000;
+  factors[(iN - 1) * 2 + 1]= .000750;
+  factors[(iN - 1) * 2 + 2]= .000500;
+  factors[(iN - 1) * 2 + 3]= .000250;
+  factors[(iN - 1) * 2 + 4]= .000000;
+  factors[(iN - 1) * 2 + 5]= -.000250;
+  factors[(iN - 1) * 2 + 6]= -.000500;
+  factors[(iN - 1) * 2 + 7]= -.000750;
+  factors[(iN - 1) * 2 + 8]= -.001000;
+  factors[(iN - 1) * 2 + 9]= -.001250;
 
 	return factors;
 }
 
-void initSwaption(FTYPE** factors) {
+void initSwaption(FTYPE* factors) {
   // setting up multiple swaptions
 	int i, j, k;
   swaptions = (parm *)malloc(sizeof(parm)*nSwaptions);
@@ -133,8 +165,8 @@ void initSwaption(FTYPE** factors) {
 
     swaptions[i].ppdFactors = dmatrix(swaptions[i].iFactors, swaptions[i].iN - 1);
     for(k = 0; k < swaptions[i].iFactors; k++)
-      for(j = 0; j< swaptions[i].iN - 1; j++)
-        swaptions[i].ppdFactors[k][j] = factors[k][j];
+      for(j = 0; j < swaptions[i].iN - 1; j++)
+        swaptions[i].ppdFactors[k * (iN - 1) + j] = factors[k * (iN - 1) + j];
   }
 
 }
@@ -144,7 +176,7 @@ void initSwaption(FTYPE** factors) {
 int main(int argc, char *argv[])
 {
   int i, j;
-  FTYPE **factors = NULL;
+  FTYPE *factors = NULL;
 
 #ifdef PARSEC_VERSION
   printf("PARSEC Benchmark Suite\n");

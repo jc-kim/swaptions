@@ -6,10 +6,10 @@
 FTYPE RanUnif( long *s );
 FTYPE CumNormalInv( FTYPE u );
 
-int HJM_SimPath_Forward_Blocking(FTYPE **ppdHJMPath, int iN, int iFactors, FTYPE dYears, FTYPE *pdForward, FTYPE *pdTotalDrift,
-    FTYPE **ppdFactors, long *lRndSeed, int BLOCKSIZE);
+int HJM_SimPath_Forward_Blocking(FTYPE *ppdHJMPath, int iN, int iFactors, FTYPE dYears, FTYPE *pdForward, FTYPE *pdTotalDrift,
+    FTYPE *ppdFactors, long *lRndSeed, int BLOCKSIZE, FTYPE *pdZ, FTYPE *randZ);
 
-int Discount_Factors_Blocking(FTYPE *pdDiscountFactors, int iN, FTYPE dYears, FTYPE *pdRatePath, int BLOCKSIZE);
+int Discount_Factors_Blocking(FTYPE *pdDiscountFactors, int iN, FTYPE dYears, FTYPE *pdRatePath, int BLOCKSIZE, FTYPE *pdexpRes);
 
 int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will store simulation results in the form:
     //Swaption Price
@@ -27,10 +27,14 @@ int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will stor
     int iFactors, 
     FTYPE dYears, 
     FTYPE *pdYield, 
-    FTYPE **ppdFactors,
+    FTYPE *ppdFactors,
     //Simulation Parameters
     long iRndSeed, 
-    long lTrials, int blocksize, int tid);
+    long lTrials, int blocksize, int tid,
+		FTYPE *ppdHJMPath, FTYPE *pdForward, FTYPE *ppdDrifts, FTYPE *pdTotalDrift,
+		FTYPE *pdDiscountingRatePath, FTYPE *pdPayoffDiscountFactors, FTYPE *pdSwapRatePath, FTYPE *pdSwapDiscountFactors, FTYPE *pdSwapPayoffs,
+		FTYPE *pdZ, FTYPE *randZ,
+		FTYPE *pdexpRes);
 /*
 extern "C" FTYPE *dvector(long length);
 extern "C" FTYPE **dmatrix(long rows, long cols);

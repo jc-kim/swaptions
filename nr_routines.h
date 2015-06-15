@@ -4,5 +4,5 @@
 void nrerror(std::string error_text);
 FTYPE* dvector(long length);
 void free_dvector(FTYPE *v);
-FTYPE** dmatrix(long rows, long cols);
-void free_dmatrix(FTYPE **m);
+FTYPE* dmatrix(long rows, long cols);
+void free_dmatrix(FTYPE *m);
