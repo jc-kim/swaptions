@@ -39,8 +39,8 @@ int HJM_SimPath_Forward_Blocking(FTYPE **ppdHJMPath,	//Matrix that stores genera
   ddelt = (FTYPE)(dYears/iN);
   sqrt_ddelt = sqrt(ddelt);
 
-  pdZ   = dmatrix(0, iFactors-1, 0, iN*BLOCKSIZE -1);
-  randZ = dmatrix(0, iFactors-1, 0, iN*BLOCKSIZE -1);
+  pdZ   = dmatrix(iFactors, iN * BLOCKSIZE);
+  randZ = dmatrix(iFactors, iN * BLOCKSIZE);
 
   // t=0 forward curve stored iN first row of ppdHJMPath
   // At time step 0: insert expected drift 
@@ -84,7 +84,7 @@ int HJM_SimPath_Forward_Blocking(FTYPE **ppdHJMPath,	//Matrix that stores genera
     }
   }
 
-  free_dmatrix(pdZ, 0, iFactors - 1, 0, iN * BLOCKSIZE - 1);
-  free_dmatrix(randZ, 0, iFactors - 1, 0, iN * BLOCKSIZE - 1);
+  free_dmatrix(pdZ);
+  free_dmatrix(randZ);
   return 1;
 }

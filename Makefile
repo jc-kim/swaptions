@@ -1,5 +1,6 @@
 DEF =
 INCLUDE =
+CXXFLAGS := $(CXXFLAGS) -g
 
 EXEC = swaptions 
 ALL_EXEC = swaptions run_cpu run_gpu run_mpi run_snucl

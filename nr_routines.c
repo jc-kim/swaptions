@@ -14,66 +14,32 @@ void nrerror(std::string error_text )
   exit(1);
 }
 
-int *ivector(long nl, long nh)
-{
-  /* allocate an int vector with subscript range v[nl..nh] */
-  int *v;
-
-  v=(int *)malloc((size_t) ((nh-nl+2)*sizeof(int)));
-  if (!v) nrerror("allocation failure in ivector()");
-  return v-nl+1;
+FTYPE *dvector(long length) {
+  FTYPE *v = (FTYPE*)malloc(sizeof(FTYPE) * length);
+  if(!v) nrerror("allocation failure in dvector()");
+  return v;
 }
 
-void free_ivector(int *v, long nl, long nh)
-{
-  /* free an int vector allocated with ivector() */
-  free((char *) (v+nl-1));
-}
-
-FTYPE *dvector( long nl, long nh )
-{
-  // allocate a FTYPE vector with subscript range v[nl..nh]
-  FTYPE *v;
-
-  v=(FTYPE *)malloc((size_t)((nh - nl + 2) * sizeof(FTYPE)));
-  if (!v) nrerror("allocation failure in dvector()");
-  return v-nl+1;
-}
-
-void free_dvector( FTYPE *v, long nl, long nh )
+void free_dvector(FTYPE *v)
 {
   // free a FTYPE vector allocated with dvector()
-  free((char*) (v+nl-1));
+  free((char*)v);
 }
 
-FTYPE **dmatrix( long nrl, long nrh, long ncl, long nch )
-{
-  // allocate a FTYPE matrix with subscript range m[nrl..nrh][ncl..nch]
-  long i, nrow=nrh-nrl+1,ncol=nch-ncl+1;
-  FTYPE **m;
+FTYPE** dmatrix(long rows, long cols) {
+  int i;
+  FTYPE** m = (FTYPE **)malloc(sizeof(FTYPE *) * rows);
+  m[0] = (FTYPE *)malloc(sizeof(FTYPE) * rows * cols);
 
-  // allocate pointers to rows
-  m=(FTYPE **) malloc((size_t)((nrow+1)*sizeof(FTYPE*)));
-  if (!m) nrerror("allocation failure 1 in dmatrix()");
-  m += 1;
-  m -= nrl;
+  for(i = 1; i < rows; i++) {
+    m[i] = m[i - 1] + cols;
+  }
 
-  // allocate rows and set pointers to them
-  m[nrl]=(FTYPE *)malloc((size_t)((nrow*ncol + 1)*sizeof(FTYPE)));
-  if(!m[nrl]) nrerror("allocation failure 2 in dmatrix()");
-  m[nrl] += 1;
-  m[nrl] -= ncl;
-
-  for(i = nrl + 1; i <= nrh; i++)
-		m[i] = m[i - 1] + ncol;
-
-  // return pointer to array of pointers to rows
   return m;
 }
 
-void free_dmatrix( FTYPE **m, long nrl, long nrh, long ncl, long nch )
+void free_dmatrix(FTYPE **m)
 {
-  // free a FTYPE matrix allocated by dmatrix()
-  free((char*)(m[nrl] + ncl - 1));
-  free((char*)(m + nrl - 1));
+  free((char*)m[0]);
+  free((char*)m);
 }

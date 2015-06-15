@@ -69,10 +69,10 @@ int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will stor
   FTYPE *pdTotalDrift;
 
   // ppdHJMPath = dmatrix(0,iN-1,0,iN-1);
-  ppdHJMPath = dmatrix(0, iN - 1, 0, iN * BLOCKSIZE - 1);    // **** per Trial data **** //
-  pdForward = dvector(0, iN - 1);
-  ppdDrifts = dmatrix(0, iFactors - 1, 0, iN - 2);
-  pdTotalDrift = dvector(0, iN - 2);
+  ppdHJMPath = dmatrix(iN, iN * BLOCKSIZE);    // **** per Trial data **** //
+  pdForward = dvector(iN);
+  ppdDrifts = dmatrix(iFactors, iN - 1);
+  pdTotalDrift = dvector(iN - 1);
 
   // **** per Trial data **** //
   FTYPE *pdDiscountingRatePath;	  //vector to store rate path along which the swaption payoff will be discounted
@@ -99,14 +99,14 @@ int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will stor
   FTYPE dSimSwaptionMeanPrice;
   FTYPE dSimSwaptionStdError;
 
-  pdPayoffDiscountFactors = dvector(0, iN*BLOCKSIZE-1);
-  pdDiscountingRatePath = dvector(0, iN*BLOCKSIZE-1);
+  pdPayoffDiscountFactors = dvector(iN * BLOCKSIZE);
+  pdDiscountingRatePath = dvector(iN * BLOCKSIZE);
 
   iSwapVectorLength = (int) (iN - dMaturity/ddelt + 0.5);	//This is the length of the HJM rate path at the time index
   //corresponding to swaption maturity.
-  pdSwapRatePath = dvector(0, iSwapVectorLength*BLOCKSIZE - 1);
-  pdSwapDiscountFactors  = dvector(0, iSwapVectorLength*BLOCKSIZE - 1);
-  pdSwapPayoffs = dvector(0, iSwapVectorLength - 1);
+  pdSwapRatePath = dvector(iSwapVectorLength*BLOCKSIZE);
+  pdSwapDiscountFactors  = dvector(iSwapVectorLength*BLOCKSIZE);
+  pdSwapPayoffs = dvector(iSwapVectorLength);
 
 
   iSwapStartTimeIndex = (int) (dMaturity/ddelt + 0.5);	//Swap starts at swaption maturity

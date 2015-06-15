@@ -72,7 +72,7 @@ void parseOpt(int argc, char** argv) {
 
 FTYPE** getFactors() {
   // initialize input dataset
-  FTYPE** factors = dmatrix(0, iFactors - 1, 0, iN - 2);
+  FTYPE** factors = dmatrix(iFactors, iN - 1);
   //the three rows store vol data for the three factors
   factors[0][0]= .01;
   factors[0][1]= .01;
@@ -127,11 +127,11 @@ void initSwaption(FTYPE** factors) {
     swaptions[i].dTenor = 2.0;
     swaptions[i].dPaymentInterval = 1.0;
 
-    swaptions[i].pdYield = dvector(0, iN - 1);
+    swaptions[i].pdYield = dvector(iN);
     swaptions[i].pdYield[0] = 0.1;
     for(j = 1; j <= swaptions[i].iN; j++) swaptions[i].pdYield[j] = swaptions[i].pdYield[j - 1] + 0.005;
 
-    swaptions[i].ppdFactors = dmatrix(0, swaptions[i].iFactors-1, 0, swaptions[i].iN-2);
+    swaptions[i].ppdFactors = dmatrix(swaptions[i].iFactors, swaptions[i].iN - 1);
     for(k = 0; k < swaptions[i].iFactors; k++)
       for(j = 0; j< swaptions[i].iN - 1; j++)
         swaptions[i].ppdFactors[k][j] = factors[k][j];
@@ -153,7 +153,6 @@ int main(int argc, char *argv[])
 
 	parseOpt(argc, argv);
   printf("Number of Simulations: %d,  Number of threads: %d Number of swaptions: %d\n", NUM_TRIALS, nThreads, nSwaptions);
-
 #ifdef ENABLE_THREADS
   pthread_t* threads;
   pthread_attr_t pthread_custom_attr;
@@ -202,8 +201,8 @@ int main(int argc, char *argv[])
   }
 
   for (i = 0; i < nSwaptions; i++) {
-    free_dvector(swaptions[i].pdYield, 0, swaptions[i].iN - 1);
-    free_dmatrix(swaptions[i].ppdFactors, 0, swaptions[i].iFactors - 1, 0, swaptions[i].iN - 2);
+    free_dvector(swaptions[i].pdYield);
+    free_dmatrix(swaptions[i].ppdFactors);
   }
 
   free(swaptions);

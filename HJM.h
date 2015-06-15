@@ -32,8 +32,8 @@ int HJM_Swaption_Blocking(FTYPE *pdSwaptionPrice, //Output vector that will stor
     long iRndSeed, 
     long lTrials, int blocksize, int tid);
 /*
-extern "C" FTYPE *dvector( long nl, long nh );
-extern "C" FTYPE **dmatrix( long nrl, long nrh, long ncl, long nch );
-extern "C" void free_dvector( FTYPE *v, long nl, long nh );
-extern "C" void free_dmatrix( FTYPE **m, long nrl, long nrh, long ncl, long nch );
+extern "C" FTYPE *dvector(long length);
+extern "C" FTYPE **dmatrix(long rows, long cols);
+extern "C" void free_dvector(FTYPE *v);
+extern "C" void free_dmatrix(FTYPE **m);
 */

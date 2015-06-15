@@ -13,7 +13,6 @@
 #include "HJM.h"
 #include "HJM_type.h"
 
-int HJM_SimPath_Forward(FTYPE **ppdHJMPath, int iN, int iFactors, FTYPE dYears, FTYPE *pdForward, FTYPE *pdTotalDrift, FTYPE **ppdFactors, long *lRndSeed);
 int HJM_Yield_to_Forward(FTYPE *pdForward, int iN, FTYPE *pdYield);
 int HJM_Drifts(FTYPE *pdTotalDrift, FTYPE **ppdDrifts, int iN, int iFactors, FTYPE dYears, FTYPE **ppdFactors);
 
@@ -71,52 +70,6 @@ int HJM_Drifts(FTYPE *pdTotalDrift,	//Output vector that stores the total drift 
   return 1;
 }
 
-int HJM_SimPath_Forward(FTYPE **ppdHJMPath,	//Matrix that stores generated HJM path (Output)
-    int iN,					//Number of time-steps
-    int iFactors,			//Number of factors in the HJM framework
-    FTYPE dYears,			//Number of years
-    FTYPE *pdForward,		//t=0 Forward curve
-    FTYPE *pdTotalDrift,	//Vector containing total drift corrections for different maturities
-    FTYPE **ppdFactors,	//Factor volatilities
-    long *lRndSeed)			//Random number seed
-{	
-  //This function computes and stores an HJM Path for given inputs
-  int i,j,l;
-  FTYPE ddelt; //length of time steps
-  FTYPE dTotalShock; //total shock by which the forward curve is hit at (t, T-t)
-  FTYPE *pdZ; //vector to store random normals
-
-  ddelt = (FTYPE)(dYears/iN);
-
-  pdZ = dvector(0, iFactors - 1); //assigning memory
-
-  for(i = 0; i < iN; i++)
-    for(j = 0; j < iN; j++)
-      ppdHJMPath[i][j]=0; //initializing HJMPath to zero
-
-  //t=0 forward curve stored iN first row of ppdHJMPath
-  for(i = 0; i < iN; i++) ppdHJMPath[0][i] = pdForward[i]; 
-
-  //Generation of HJM Path
-  for(j = 1; j < iN; j++)
-  {
-		//shocks to hit various factors for forward curve at t
-    for (l = 0; l < iFactors; l++) pdZ[l]= CumNormalInv(RanUnif(lRndSeed));
-
-    for (l = 0; l < iN - j; l++)
-    {
-      dTotalShock = 0;
-      for (i = 0; i < iFactors; i++) dTotalShock += ppdFactors[i][l]* pdZ[i];
-
-      ppdHJMPath[j][l] = ppdHJMPath[j - 1][l + 1] + (pdTotalDrift[l] * ddelt) + (sqrt(ddelt) * dTotalShock);
-      //as per formula
-    }
-  }
-
-  free_dvector(pdZ, 0, iFactors - 1);
-  return 1;
-}
-
 int Discount_Factors_Blocking(FTYPE *pdDiscountFactors, 
     int iN, 
     FTYPE dYears, 
@@ -125,7 +78,7 @@ int Discount_Factors_Blocking(FTYPE *pdDiscountFactors,
   int i, j, b;
   FTYPE ddelt = (FTYPE)(dYears/iN); //HJM time-step length
 
-  FTYPE *pdexpRes = dvector(0, (iN - 1) * BLOCKSIZE -1);
+  FTYPE *pdexpRes = dvector((iN - 1) * BLOCKSIZE);
 
   //precompute the exponientials
   for (j = 0; j < (iN - 1) * BLOCKSIZE; j++) pdexpRes[j] = -pdRatePath[j] * ddelt;
@@ -142,6 +95,6 @@ int Discount_Factors_Blocking(FTYPE *pdDiscountFactors,
     }
   } 
 
-  free_dvector(pdexpRes, 0, (iN - 1) * BLOCKSIZE - 1);
+  free_dvector(pdexpRes);
   return 1;
 }
