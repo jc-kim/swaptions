@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <math.h>
 #include <iostream>
 
@@ -17,6 +18,9 @@
 #include <pthread.h>
 #define MAX_THREAD 1024
 #endif //ENABLE_THREADS
+#ifdef ENABLE_OPENCL
+#include <CL/cl.h>
+#endif
 
 int NUM_TRIALS = DEFAULT_NUM_TRIALS;
 int nThreads = 1;
@@ -26,39 +30,196 @@ FTYPE dYears = 5.5;
 int iFactors = 3; 
 parm *swaptions;
 
+#ifdef ENABLE_OPENCL
+char* getKernelSrc() {
+	FILE* fp = fopen("kernel.cl", "r");
+	char *result;
+	long file_size;
+	fseek(fp, 0, SEEK_END);
+	file_size = ftell(fp);
+	rewind(fp);
+
+	result = (char*)malloc(sizeof(char) * (file_size + 1));
+	fread(result, sizeof(char), file_size, fp);
+  result[file_size] = '\0';
+	fclose(fp);
+
+	return result;
+}
+
+void checkError(cl_int err) {
+  if(err != CL_SUCCESS) {
+    printf("Error occured! %d\n", err);
+    exit(1);
+  }
+}
+
+void checkError(cl_int err, int line_no) {
+  if(err != CL_SUCCESS) {
+    printf("Error occured in line %d!: %d\n", line_no, err);
+  }
+}
+#endif
+
 void* worker(void *arg){
   int tid = *((int *)arg);
-  FTYPE pdSwaptionPrice[2];
 
   int chunksize = nSwaptions / nThreads;
   int beg = tid * chunksize;
   int end = (tid == nThreads - 1 ? nSwaptions : (tid + 1) * chunksize);
 
+#ifdef ENABLE_OPENCL
+#ifdef DEVICE_CPU
+  cl_device_type device_type = CL_DEVICE_TYPE_CPU;
+#else
+  cl_device_type device_type = CL_DEVICE_TYPE_GPU;
+#endif
+  FTYPE* swaptionPrices = dmatrix(chunksize, 2);
+  cl_platform_id platform;
+  cl_device_id* devices;
+  cl_uint device_count;
+  cl_program program;
+  cl_kernel kernel;
+  cl_context context;
+  cl_command_queue* queues;
+  cl_int err;
+
+  checkError(clGetPlatformIDs(1, &platform, NULL));
+  checkError(clGetDeviceIDs(platform, device_type, NULL, NULL, &device_count));
+  devices = (cl_device_id*)malloc(sizeof(cl_device_id) * device_count);
+  checkError(clGetDeviceIDs(platform, device_type, device_count, devices, NULL));
+  context = clCreateContext(NULL, device_count, devices, NULL, NULL, &err);
+  checkError(err);
+
+  char* kernelSource = getKernelSrc();
+  size_t kernelLength = strlen(kernelSource);
+
+  program = clCreateProgramWithSource(context, 1, (const char**)&kernelSource, &kernelLength, &err);
+  checkError(err);
+  err = clBuildProgram(program, device_count, devices, NULL, NULL, NULL);
+  if(err != CL_SUCCESS) {
+    printf("Kernel Program build failed: \n");
+    size_t len;
+    char *buffer;
+    cl_build_status status;
+    buffer = (char*)calloc(2048,sizeof(char));
+    clGetProgramBuildInfo(program, *devices, CL_PROGRAM_BUILD_LOG, 2048*sizeof(char), buffer, &len);
+    printf("\tLog: %s\n", buffer);
+    clGetProgramBuildInfo(program, *devices, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &status, &len);
+    printf("\tSTATUS: %s\n", status == CL_BUILD_SUCCESS ? "success" : (status == CL_BUILD_ERROR ? "error": (status == CL_BUILD_NONE ? "none": "progress")));
+    clGetProgramBuildInfo(program, *devices, CL_PROGRAM_BUILD_OPTIONS, 2048*sizeof(char), buffer, &len);
+    printf("\tOPTIONS: %s\n", buffer);
+    exit(1);
+  }
+  kernel = clCreateKernel(program, "HJM_Swaption_Blocking", &err);
+  checkError(err);
+
+  queues = (cl_command_queue*)malloc(sizeof(cl_command_queue) * device_count);
+  for(int i = 0; i < device_count; i++) {
+    queues[i] = clCreateCommandQueue(context, devices[i], CL_QUEUE_PROFILING_ENABLE, &err);
+    checkError(err);
+  }
+
+  int BLOCKSIZE = BLOCK_SIZE;
+  int i, device_idx;
+  for(i = beg, device_idx = 0; i < end; device_idx = (device_idx + 1) % device_count, i++) {
+    FTYPE ddelt = (FTYPE)(swaptions[i].dYears / swaptions[i].iN);
+    int iSwapVectorLength = (int)(swaptions[i].iN - swaptions[i].dMaturity / ddelt + 0.5);
+
+    cl_command_queue queue = queues[device_idx];
+
+    cl_mem pdSwaptionPriceBuf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(FTYPE) * 2, NULL, &err);
+    checkError(err);
+    cl_mem pdYieldBuf = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(FTYPE) * swaptions[i].iN, NULL, &err);
+    checkError(err);
+    cl_mem ppdFactorsBuf = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), NULL, &err);
+    checkError(err);
+    long lRndSeed = 100;
+    long trials = NUM_TRIALS;
+
+    checkError(clSetKernelArg(kernel, 0, sizeof(cl_mem), &pdSwaptionPriceBuf), __LINE__);
+    checkError(clSetKernelArg(kernel, 1, sizeof(FTYPE), &swaptions[i].dStrike), __LINE__);
+    checkError(clSetKernelArg(kernel, 2, sizeof(FTYPE), &swaptions[i].dCompounding), __LINE__);
+    checkError(clSetKernelArg(kernel, 3, sizeof(FTYPE), &swaptions[i].dMaturity), __LINE__);
+    checkError(clSetKernelArg(kernel, 4, sizeof(FTYPE), &swaptions[i].dTenor), __LINE__);
+    checkError(clSetKernelArg(kernel, 5, sizeof(FTYPE), &swaptions[i].dPaymentInterval), __LINE__);
+    checkError(clSetKernelArg(kernel, 6, sizeof(int), &swaptions[i].iN), __LINE__);
+    checkError(clSetKernelArg(kernel, 7, sizeof(int), &swaptions[i].iFactors), __LINE__);
+    checkError(clSetKernelArg(kernel, 8, sizeof(FTYPE), &swaptions[i].dYears), __LINE__);
+    checkError(clSetKernelArg(kernel, 9, sizeof(cl_mem), &pdYieldBuf), __LINE__);
+    checkError(clSetKernelArg(kernel, 10, sizeof(cl_mem), &ppdFactorsBuf), __LINE__);
+    checkError(clSetKernelArg(kernel, 11, sizeof(long), &lRndSeed), __LINE__);
+    checkError(clSetKernelArg(kernel, 12, sizeof(long), &trials), __LINE__);
+    checkError(clSetKernelArg(kernel, 13, sizeof(int), &BLOCKSIZE), __LINE__);
+    checkError(clSetKernelArg(kernel, 14, sizeof(int), &tid), __LINE__);
+    checkError(clSetKernelArg(kernel, 15, sizeof(FTYPE) * swaptions[i].iN * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // ppdHJMPath
+    checkError(clSetKernelArg(kernel, 16, sizeof(FTYPE) * swaptions[i].iN, NULL), __LINE__); // pdForward
+    checkError(clSetKernelArg(kernel, 17, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), NULL), __LINE__); // ppdDrifts
+    checkError(clSetKernelArg(kernel, 18, sizeof(FTYPE) * (swaptions[i].iN - 1), NULL), __LINE__); // pdTotalDrift
+    checkError(clSetKernelArg(kernel, 19, sizeof(FTYPE) * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // pdDiscountingRatePath
+    checkError(clSetKernelArg(kernel, 20, sizeof(FTYPE) * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // pdPayoffDiscountFactors
+    checkError(clSetKernelArg(kernel, 21, sizeof(FTYPE) * iSwapVectorLength * BLOCK_SIZE, NULL), __LINE__); // pdSwapRatePath
+    checkError(clSetKernelArg(kernel, 22, sizeof(FTYPE) * iSwapVectorLength * BLOCK_SIZE, NULL), __LINE__); // pdSwapDiscountFactors
+    checkError(clSetKernelArg(kernel, 23, sizeof(FTYPE) * iSwapVectorLength, NULL), __LINE__); // pdSwapPayoffs
+    checkError(clSetKernelArg(kernel, 24, sizeof(FTYPE) * swaptions[i].iFactors * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // pdZ
+    checkError(clSetKernelArg(kernel, 25, sizeof(FTYPE) * swaptions[i].iFactors * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // randZ
+    checkError(clSetKernelArg(kernel, 26, sizeof(FTYPE) * (swaptions[i].iN - 1) * BLOCK_SIZE, NULL), __LINE__); // pdexpRes
+
+    checkError(clEnqueueWriteBuffer(queue, pdYieldBuf, CL_FALSE, 0, sizeof(FTYPE) * swaptions[i].iN, swaptions[i].pdYield, NULL, NULL, NULL));
+    checkError(clEnqueueWriteBuffer(queue, ppdFactorsBuf, CL_FALSE, 0, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), swaptions[i].ppdFactors, NULL, NULL, NULL));
+
+    size_t group_size[1] = { 1 };
+    size_t work_items[1] = { 1 };
+    checkError(clEnqueueNDRangeKernel(queues[device_idx], kernel, 1, 0, group_size, work_items, 0, NULL, NULL));
+    checkError(clEnqueueReadBuffer(queue, pdSwaptionPriceBuf, CL_FALSE, 0, sizeof(FTYPE) * 2, (void*)&swaptionPrices[(i - beg) * 2], NULL, NULL, NULL));
+
+    clReleaseMemObject(ppdFactorsBuf);
+    clReleaseMemObject(pdYieldBuf);
+    clReleaseMemObject(pdSwaptionPriceBuf);
+  }
+  for(i = 0; i < device_count; i++) {
+    clFinish(queues[i]);
+  }
+
+  for(i = beg; i < end; i++) {
+    swaptions[i].dSimSwaptionMeanPrice = swaptionPrices[(i - beg) * 2];
+    swaptions[i].dSimSwaptionStdError = swaptionPrices[(i - beg) * 2 + 1];
+  }
+  clReleaseKernel(kernel);
+  clReleaseProgram(program);
+  clReleaseContext(context);
+  for(i = 0; i < device_count; i++) {
+    clReleaseCommandQueue(queues[i]);
+    clReleaseDevice(devices[i]);
+  }
+  free(swaptionPrices);
+#else
+  FTYPE pdSwaptionPrice[2];
   for(int i = beg; i < end; i++) {
-		FTYPE ddelt = (FTYPE)(swaptions[i].dYears / swaptions[i].iN);
-		int iSwapVectorLength = (int)(swaptions[i].iN - swaptions[i].dMaturity / ddelt + 0.5);
-		FTYPE *ppdHJMPath = dmatrix(iN, iN * BLOCK_SIZE),
-					*pdForward = dvector(iN),
-					*ppdDrifts = dmatrix(iFactors, iN - 1),
-					*pdTotalDrift = dvector(iN - 1);
-		FTYPE *pdDiscountingRatePath = dvector(iN * BLOCK_SIZE),
-					*pdPayoffDiscountFactors = dvector(iN * BLOCK_SIZE),
-					*pdSwapRatePath = dvector(iSwapVectorLength * BLOCK_SIZE),
-					*pdSwapDiscountFactors = dvector(iSwapVectorLength * BLOCK_SIZE),
-					*pdSwapPayoffs = dvector(iSwapVectorLength);
-		FTYPE *pdZ = dmatrix(iFactors, iN * BLOCK_SIZE),
-					*randZ = dmatrix(iFactors, iN * BLOCK_SIZE);
-		FTYPE *pdexpRes = dvector((iN - 1) * BLOCK_SIZE);
+    FTYPE ddelt = (FTYPE)(swaptions[i].dYears / swaptions[i].iN);
+    int iSwapVectorLength = (int)(swaptions[i].iN - swaptions[i].dMaturity / ddelt + 0.5);
+    FTYPE *ppdHJMPath = dmatrix(iN, iN * BLOCK_SIZE),
+          *pdForward = dvector(iN),
+          *ppdDrifts = dmatrix(iFactors, iN - 1),
+          *pdTotalDrift = dvector(iN - 1);
+    FTYPE *pdDiscountingRatePath = dvector(iN * BLOCK_SIZE),
+          *pdPayoffDiscountFactors = dvector(iN * BLOCK_SIZE),
+          *pdSwapRatePath = dvector(iSwapVectorLength * BLOCK_SIZE),
+          *pdSwapDiscountFactors = dvector(iSwapVectorLength * BLOCK_SIZE),
+          *pdSwapPayoffs = dvector(iSwapVectorLength);
+    FTYPE *pdZ = dmatrix(iFactors, iN * BLOCK_SIZE),
+          *randZ = dmatrix(iFactors, iN * BLOCK_SIZE);
+    FTYPE *pdexpRes = dvector((iN - 1) * BLOCK_SIZE);
 
     int iSuccess = HJM_Swaption_Blocking(pdSwaptionPrice, swaptions[i].dStrike,
-			swaptions[i].dCompounding, swaptions[i].dMaturity,
-			swaptions[i].dTenor, swaptions[i].dPaymentInterval,
-			swaptions[i].iN, swaptions[i].iFactors, swaptions[i].dYears,
-			swaptions[i].pdYield, swaptions[i].ppdFactors,
-			100, NUM_TRIALS, BLOCK_SIZE, 0,
-			ppdHJMPath, pdForward, ppdDrifts, pdTotalDrift,
-			pdDiscountingRatePath, pdPayoffDiscountFactors, pdSwapRatePath, pdSwapDiscountFactors, pdSwapPayoffs,
-			pdZ, randZ, pdexpRes);
+        swaptions[i].dCompounding, swaptions[i].dMaturity,
+        swaptions[i].dTenor, swaptions[i].dPaymentInterval,
+        swaptions[i].iN, swaptions[i].iFactors, swaptions[i].dYears,
+        swaptions[i].pdYield, swaptions[i].ppdFactors,
+        100, NUM_TRIALS, BLOCK_SIZE, 0,
+        ppdHJMPath, pdForward, ppdDrifts, pdTotalDrift,
+        pdDiscountingRatePath, pdPayoffDiscountFactors, pdSwapRatePath, pdSwapDiscountFactors, pdSwapPayoffs,
+        pdZ, randZ, pdexpRes);
 		assert(iSuccess == 1);
 
 		free(ppdHJMPath);
@@ -77,8 +238,8 @@ void* worker(void *arg){
     swaptions[i].dSimSwaptionMeanPrice = pdSwaptionPrice[0];
     swaptions[i].dSimSwaptionStdError = pdSwaptionPrice[1];
   }
-
-  return NULL;    
+#endif
+  return NULL;
 }
 
 void parseOpt(int argc, char** argv) {
@@ -89,7 +250,7 @@ void parseOpt(int argc, char** argv) {
   }
 
   for (int j=1; j<argc; j++) {
-    if (!strcmp("-sm", argv[j])) {NUM_TRIALS = atoi(argv[++j]);}
+    if (!strcmp("-sm", argv[j])) {NUM_TRIALS = atol(argv[++j]);}
     else if (!strcmp("-nt", argv[j])) {nThreads = atoi(argv[++j]);} 
     else if (!strcmp("-ns", argv[j])) {nSwaptions = atoi(argv[++j]);} 
     else {

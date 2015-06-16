@@ -13,26 +13,25 @@ ifdef version
   ifeq "$(version)" "pthreads" 
     DEF := $(DEF) -DENABLE_THREADS
     CXXFLAGS := $(CXXFLAGS) -pthread
-	endif
-	ifeq "$(version)" "cpu"
-		DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_CPU
-		CXXFLAGS := $(CXXFLAGS) -lOpenCL
-		EXEC := run_cpu
-	endif
-	ifeq "$(version)" "gpu"
-		DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_GPU
-		CXXFLAGS := $(CXXFLAGS) -lOpenCL
-		EXEC := run_gpu
-	endif
-	ifeq "$(version)" "mpi"
-		CXX := mpig++
-		DEF := $(DEF) -DENABLE_OPENCL -DENABLE_MPI
-		EXEC := run_mpi
-	endif
-	ifeq "$(version)" "snucl"
-		DEF := $(DEF) -DENABLE_OPENCL -DENABLE_SNUCL
-		CXXFLAGS := $(CXXFLAGS) -lOpenCL
-		EXEC := run_snucl
+	else
+		LDFLAGS := $(LDFLAGS) -lOpenCL
+		ifeq "$(version)" "cpu"
+			DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_CPU
+			EXEC := run_cpu
+		endif
+		ifeq "$(version)" "gpu"
+			DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_GPU
+			EXEC := run_gpu
+		endif
+		ifeq "$(version)" "mpi"
+			CXX := mpig++
+			DEF := $(DEF) -DENABLE_OPENCL -DENABLE_MPI
+			EXEC := run_mpi
+		endif
+		ifeq "$(version)" "snucl"
+			DEF := $(DEF) -DENABLE_OPENCL -DENABLE_SNUCL
+			EXEC := run_snucl
+		endif
 	endif
 endif
 
