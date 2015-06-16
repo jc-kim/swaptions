@@ -22,8 +22,8 @@ FTYPE *dvector(long length) {
 
 void free_dvector(FTYPE *v)
 {
-  // free a FTYPE vector allocated with dvector()
-  free((char*)v);
+  free(v);
+  v = NULL;
 }
 
 FTYPE* dmatrix(long rows, long cols) {
@@ -34,5 +34,6 @@ FTYPE* dmatrix(long rows, long cols) {
 
 void free_dmatrix(FTYPE *m)
 {
-  free((char*)m);
+  free(m);
+  m = NULL;
 }

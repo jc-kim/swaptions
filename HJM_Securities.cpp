@@ -18,8 +18,9 @@
 #include <pthread.h>
 #define MAX_THREAD 1024
 #endif //ENABLE_THREADS
+
 #ifdef ENABLE_OPENCL
-#include <CL/cl.h>
+#include <CL/cl.hpp>
 #endif
 
 int NUM_TRIALS = DEFAULT_NUM_TRIALS;
@@ -28,23 +29,23 @@ int nSwaptions = 1;
 int iN = 11;
 FTYPE dYears = 5.5; 
 int iFactors = 3; 
-parm *swaptions;
+parm *swaptions = NULL;
 
 #ifdef ENABLE_OPENCL
 char* getKernelSrc() {
-	FILE* fp = fopen("kernel.cl", "r");
-	char *result;
-	long file_size;
-	fseek(fp, 0, SEEK_END);
-	file_size = ftell(fp);
-	rewind(fp);
+  FILE* fp = fopen("kernel.cl", "r");
+  char *result;
+  long file_size;
+  fseek(fp, 0, SEEK_END);
+  file_size = ftell(fp);
+  rewind(fp);
 
-	result = (char*)malloc(sizeof(char) * (file_size + 1));
-	fread(result, sizeof(char), file_size, fp);
+  result = (char*)malloc(sizeof(char) * (file_size + 1));
+  fread(result, sizeof(char), file_size, fp);
   result[file_size] = '\0';
-	fclose(fp);
+  fclose(fp);
 
-	return result;
+  return result;
 }
 
 void checkError(cl_int err) {
@@ -93,7 +94,6 @@ void* worker(void *arg){
 
   char* kernelSource = getKernelSrc();
   size_t kernelLength = strlen(kernelSource);
-
   program = clCreateProgramWithSource(context, 1, (const char**)&kernelSource, &kernelLength, &err);
   checkError(err);
   err = clBuildProgram(program, device_count, devices, NULL, NULL, NULL);
@@ -104,7 +104,7 @@ void* worker(void *arg){
     cl_build_status status;
     buffer = (char*)calloc(2048,sizeof(char));
     clGetProgramBuildInfo(program, *devices, CL_PROGRAM_BUILD_LOG, 2048*sizeof(char), buffer, &len);
-    printf("\tLog: %s\n", buffer);
+    printf("\tLOG: %s\n", buffer);
     clGetProgramBuildInfo(program, *devices, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &status, &len);
     printf("\tSTATUS: %s\n", status == CL_BUILD_SUCCESS ? "success" : (status == CL_BUILD_ERROR ? "error": (status == CL_BUILD_NONE ? "none": "progress")));
     clGetProgramBuildInfo(program, *devices, CL_PROGRAM_BUILD_OPTIONS, 2048*sizeof(char), buffer, &len);
@@ -115,7 +115,7 @@ void* worker(void *arg){
   checkError(err);
 
   queues = (cl_command_queue*)malloc(sizeof(cl_command_queue) * device_count);
-  for(int i = 0; i < device_count; i++) {
+  for(size_t i = 0; i < device_count; i++) {
     queues[i] = clCreateCommandQueue(context, devices[i], CL_QUEUE_PROFILING_ENABLE, &err);
     checkError(err);
   }
@@ -177,7 +177,7 @@ void* worker(void *arg){
     clReleaseMemObject(pdYieldBuf);
     clReleaseMemObject(pdSwaptionPriceBuf);
   }
-  for(i = 0; i < device_count; i++) {
+  for(size_t i = 0; i < device_count; i++) {
     clFinish(queues[i]);
   }
 
@@ -188,7 +188,7 @@ void* worker(void *arg){
   clReleaseKernel(kernel);
   clReleaseProgram(program);
   clReleaseContext(context);
-  for(i = 0; i < device_count; i++) {
+  for(size_t i = 0; i < device_count; i++) {
     clReleaseCommandQueue(queues[i]);
     clReleaseDevice(devices[i]);
   }
@@ -220,20 +220,20 @@ void* worker(void *arg){
         ppdHJMPath, pdForward, ppdDrifts, pdTotalDrift,
         pdDiscountingRatePath, pdPayoffDiscountFactors, pdSwapRatePath, pdSwapDiscountFactors, pdSwapPayoffs,
         pdZ, randZ, pdexpRes);
-		assert(iSuccess == 1);
+    assert(iSuccess == 1);
 
-		free(ppdHJMPath);
-		free(pdForward);
-		free(ppdDrifts);
-		free(pdTotalDrift);
-		free(pdDiscountingRatePath);
-		free(pdPayoffDiscountFactors);
-		free(pdSwapRatePath);
-		free(pdSwapDiscountFactors);
-		free(pdSwapPayoffs);
-		free(pdZ);
-		free(randZ);
-		free(pdexpRes);
+    free(ppdHJMPath);
+    free(pdForward);
+    free(ppdDrifts);
+    free(pdTotalDrift);
+    free(pdDiscountingRatePath);
+    free(pdPayoffDiscountFactors);
+    free(pdSwapRatePath);
+    free(pdSwapDiscountFactors);
+    free(pdSwapPayoffs);
+    free(pdZ);
+    free(randZ);
+    free(pdexpRes);
 
     swaptions[i].dSimSwaptionMeanPrice = pdSwaptionPrice[0];
     swaptions[i].dSimSwaptionStdError = pdSwaptionPrice[1];
@@ -300,13 +300,13 @@ FTYPE* getFactors() {
   factors[(iN - 1) * 2 + 8]= -.001000;
   factors[(iN - 1) * 2 + 9]= -.001250;
 
-	return factors;
+  return factors;
 }
 
 void initSwaption(FTYPE* factors) {
   // setting up multiple swaptions
-	int i, j, k;
-  swaptions = (parm *)malloc(sizeof(parm)*nSwaptions);
+  int i, j, k;
+  swaptions = (parm*)malloc(sizeof(parm) * nSwaptions);
 
   for (i = 0; i < nSwaptions; i++) {
     swaptions[i].Id = i;
@@ -321,22 +321,22 @@ void initSwaption(FTYPE* factors) {
     swaptions[i].dPaymentInterval = 1.0;
 
     swaptions[i].pdYield = dvector(iN);
-    swaptions[i].pdYield[0] = 0.1;
-    for(j = 1; j <= swaptions[i].iN; j++) swaptions[i].pdYield[j] = swaptions[i].pdYield[j - 1] + 0.005;
-
     swaptions[i].ppdFactors = dmatrix(swaptions[i].iFactors, swaptions[i].iN - 1);
+
+    swaptions[i].pdYield[0] = 0.1;
+    for(j = 1; j < swaptions[i].iN; j++) swaptions[i].pdYield[j] = swaptions[i].pdYield[j - 1] + 0.005;
+
     for(k = 0; k < swaptions[i].iFactors; k++)
       for(j = 0; j < swaptions[i].iN - 1; j++)
         swaptions[i].ppdFactors[k * (iN - 1) + j] = factors[k * (iN - 1) + j];
   }
-
 }
 //Please note: Whenever we type-cast to (int), we add 0.5 to ensure that the value is rounded to the correct number. 
 //For instance, if X/Y = 0.999 then (int) (X/Y) will equal 0 and not 1 (as (int) rounds down).
 //Adding 0.5 ensures that this does not happen. Therefore we use (int) (X/Y + 0.5); instead of (int) (X/Y);
 int main(int argc, char *argv[])
 {
-  int i, j;
+  int i;
   FTYPE *factors = NULL;
 
 #ifdef PARSEC_VERSION
@@ -344,7 +344,7 @@ int main(int argc, char *argv[])
   fflush(NULL);
 #endif //PARSEC_VERSION
 
-	parseOpt(argc, argv);
+  parseOpt(argc, argv);
   printf("Number of Simulations: %d,  Number of threads: %d Number of swaptions: %d\n", NUM_TRIALS, nThreads, nSwaptions);
 #ifdef ENABLE_THREADS
   pthread_t* threads;
@@ -368,8 +368,9 @@ int main(int argc, char *argv[])
   }
 #endif
 
-	factors = getFactors();
-	initSwaption(factors);
+  factors = getFactors();
+  initSwaption(factors);
+  free(factors);
 
   // Calling the Swaption Pricing Routine
 #ifdef ENABLE_THREADS
@@ -394,8 +395,8 @@ int main(int argc, char *argv[])
   }
 
   for (i = 0; i < nSwaptions; i++) {
-    free_dvector(swaptions[i].pdYield);
-    free_dmatrix(swaptions[i].ppdFactors);
+    free(swaptions[i].pdYield);
+    free(swaptions[i].ppdFactors);
   }
 
   free(swaptions);
