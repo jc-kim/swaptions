@@ -17,8 +17,8 @@ ifdef version
     DEF := $(DEF) -DENABLE_THREADS
     CXXFLAGS := $(CXXFLAGS) -pthread
 	else
-		LDFLAGS := $(LDFLAGS) -lOpenCL
 		ifeq "$(version)" "cpu"
+			LDFLAGS := $(LDFLAGS) -lOpenCL
 			DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_CPU
 			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
@@ -26,6 +26,7 @@ ifdef version
 			EXEC := swaptions_cpu
 		endif
 		ifeq "$(version)" "gpu"
+			LDFLAGS := $(LDFLAGS) -lOpenCL
 			DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_GPU
 			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
@@ -33,6 +34,7 @@ ifdef version
 			EXEC := swaptions_gpu
 		endif
 		ifeq "$(version)" "mpi"
+			LDFLAGS := $(LDFLAGS) -lOpenCL
 			CXX := mpic++
 			DEF := $(DEF) -DENABLE_OPENCL -DENABLE_MPI
 			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
@@ -47,6 +49,9 @@ ifdef version
 				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
 				HJM_Securities_snucl.o
 			EXEC := swaptions_snucl
+			INCLUDE := $(INCLUDE) -I$(SNUCLROOT)/inc
+			LDLIBS := $(LDLIBS) -L$(SNUCLROOT)/lib 
+			LDFLAGS := $(LDFLAGS) -lsnucl_cluster
 		endif
 	endif
 endif
@@ -54,7 +59,7 @@ endif
 all: $(EXEC)
 
 $(EXEC): $(OBJS)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(DEF) $(OBJS) $(INCLUDE) $(LIBS) -o $(EXEC)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(DEF) $(OBJS) $(INCLUDE) $(LIBS) $(LDLIBS) -o $(EXEC)
 
 .cpp.o:
 	$(CXX) $(CXXFLAGS) $(DEF) -c $*.cpp -o $*.o
