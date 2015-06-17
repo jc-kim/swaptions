@@ -22,6 +22,10 @@
 #ifdef ENABLE_OPENCL
 #include <CL/cl.hpp>
 #endif
+#ifdef ENABLE_MPI
+#include "mpi.h"
+#define MASTER 0
+#endif
 
 int NUM_TRIALS = DEFAULT_NUM_TRIALS;
 int nThreads = 1;
@@ -181,10 +185,30 @@ void* worker(void *arg){
     clFinish(queues[i]);
   }
 
+#ifdef ENABLE_MPI
+  FTYPE* totalSwaptionPrices = (FTYPE*)malloc(sizeof(FTYPE) * nSwaptions * 2);
+  int *recvCounts = (int*)malloc(sizeof(int) * nThreads),
+      *displs = (int*)malloc(sizeof(int) * nThreads);
+  int chunksize2 = chunksize * 2,
+      beg2 = beg * 2;
+  MPI_Allgather(&chunksize2, 1, MPI_INT, recvCounts, 1, MPI_INT, MPI_COMM_WORLD);
+  MPI_Allgather(&beg2, 1, MPI_INT, displs, 1, MPI_INT, MPI_COMM_WORLD);
+  MPI_Gatherv(swaptionPrices, chunksize2, MPI_DOUBLE, totalSwaptionPrices, recvCounts, displs, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+  if(tid == MASTER) {
+    for(i = 0; i < nSwaptions; i++) {
+      swaptions[i].dSimSwaptionMeanPrice = totalSwaptionPrices[i * 2];
+      swaptions[i].dSimSwaptionStdError = totalSwaptionPrices[i * 2 + 1];
+    }
+  }
+  free(displs);
+  free(recvCounts);
+  free(totalSwaptionPrices);
+#else
   for(i = beg; i < end; i++) {
     swaptions[i].dSimSwaptionMeanPrice = swaptionPrices[(i - beg) * 2];
     swaptions[i].dSimSwaptionStdError = swaptionPrices[(i - beg) * 2 + 1];
   }
+#endif
   clReleaseKernel(kernel);
   clReleaseProgram(program);
   clReleaseContext(context);
@@ -384,15 +408,28 @@ int main(int argc, char *argv[])
   }
 
   free(threads);
+#elif ENABLE_MPI
+  int rank;
+  MPI_Init(&argc, &argv);
+  MPI_Comm_size(MPI_COMM_WORLD, &nThreads);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  worker(&rank);
 #else
   int threadID = 0;
   worker(&threadID);
 #endif //ENABLE_THREADS
 
+#ifdef ENABLE_MPI
+  if(rank == MASTER) {
+#endif
   for (i = 0; i < nSwaptions; i++) {
     fprintf(stderr,"Swaption%d: [SwaptionPrice: %.10lf StdError: %.10lf] \n", 
         i, swaptions[i].dSimSwaptionMeanPrice, swaptions[i].dSimSwaptionStdError);
   }
+#ifdef ENABLE_MPI
+  }
+  MPI_Finalize();
+#endif
 
   for (i = 0; i < nSwaptions; i++) {
     free(swaptions[i].pdYield);
