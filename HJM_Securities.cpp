@@ -62,9 +62,16 @@ void checkError(cl_int err) {
 void checkError(cl_int err, int line_no) {
   if(err != CL_SUCCESS) {
     printf("Error occured in line %d!: %d\n", line_no, err);
+    exit(1);
   }
 }
 #endif
+
+inline int closestLargerPower2(int num) {
+  int result = 1;
+  while(result < num) result <<= 1;
+  return result;
+}
 
 void* worker(void *arg){
   int tid = *((int *)arg);
@@ -84,7 +91,7 @@ void* worker(void *arg){
   cl_device_id* devices;
   cl_uint device_count;
   cl_program program;
-  cl_kernel kernel;
+  cl_kernel kernel, kernel_reduction;
   cl_context context;
   cl_command_queue* queues;
   cl_int err;
@@ -118,6 +125,9 @@ void* worker(void *arg){
   kernel = clCreateKernel(program, "HJM_Swaption_Blocking", &err);
   checkError(err);
 
+  kernel_reduction = clCreateKernel(program, "reduction_sum", &err);
+  checkError(err);
+
   queues = (cl_command_queue*)malloc(sizeof(cl_command_queue) * device_count);
   for(size_t i = 0; i < device_count; i++) {
     queues[i] = clCreateCommandQueue(context, devices[i], CL_QUEUE_PROFILING_ENABLE, &err);
@@ -129,6 +139,8 @@ void* worker(void *arg){
   for(i = beg, device_idx = 0; i < end; device_idx = (device_idx + 1) % device_count, i++) {
     FTYPE ddelt = (FTYPE)(swaptions[i].dYears / swaptions[i].iN);
     int iSwapVectorLength = (int)(swaptions[i].iN - swaptions[i].dMaturity / ddelt + 0.5);
+    int initPartialSumSize = (int)ceil((double)NUM_TRIALS / (double)BLOCK_SIZE);
+    int partialSumSize = closestLargerPower2(initPartialSumSize);
 
     cl_command_queue queue = queues[device_idx];
 
@@ -138,6 +150,10 @@ void* worker(void *arg){
     checkError(err);
     cl_mem ppdFactorsBuf = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), NULL, &err);
     checkError(err);
+    cl_mem partialSumBuf = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(FTYPE) * initPartialSumSize, NULL, &err);
+    checkError(err, __LINE__);
+    cl_mem partialSum2Buf = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(FTYPE) * initPartialSumSize, NULL, &err);
+    checkError(err, __LINE__);
     long lRndSeed = 100;
     long trials = NUM_TRIALS;
 
@@ -168,18 +184,80 @@ void* worker(void *arg){
     checkError(clSetKernelArg(kernel, 24, sizeof(FTYPE) * swaptions[i].iFactors * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // pdZ
     checkError(clSetKernelArg(kernel, 25, sizeof(FTYPE) * swaptions[i].iFactors * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // randZ
     checkError(clSetKernelArg(kernel, 26, sizeof(FTYPE) * (swaptions[i].iN - 1) * BLOCK_SIZE, NULL), __LINE__); // pdexpRes
+    checkError(clSetKernelArg(kernel, 27, sizeof(cl_mem), &partialSumBuf), __LINE__);
+    checkError(clSetKernelArg(kernel, 28, sizeof(cl_mem), &partialSum2Buf), __LINE__);
+    checkError(clSetKernelArg(kernel, 29, sizeof(cl_int), &swaptions[i].Id), __LINE__);
 
-    checkError(clEnqueueWriteBuffer(queue, pdYieldBuf, CL_FALSE, 0, sizeof(FTYPE) * swaptions[i].iN, swaptions[i].pdYield, NULL, NULL, NULL));
-    checkError(clEnqueueWriteBuffer(queue, ppdFactorsBuf, CL_FALSE, 0, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), swaptions[i].ppdFactors, NULL, NULL, NULL));
+    checkError(clEnqueueWriteBuffer(queue, pdYieldBuf, CL_TRUE, 0, sizeof(FTYPE) * swaptions[i].iN, swaptions[i].pdYield, NULL, NULL, NULL));
+    checkError(clEnqueueWriteBuffer(queue, ppdFactorsBuf, CL_TRUE, 0, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), swaptions[i].ppdFactors, NULL, NULL, NULL));
 
-    size_t group_size[1] = { 1 };
-    size_t work_items[1] = { 1 };
-    checkError(clEnqueueNDRangeKernel(queues[device_idx], kernel, 1, 0, group_size, work_items, 0, NULL, NULL));
-    checkError(clEnqueueReadBuffer(queue, pdSwaptionPriceBuf, CL_FALSE, 0, sizeof(FTYPE) * 2, (void*)&swaptionPrices[(i - beg) * 2], NULL, NULL, NULL));
+    size_t global[1] = { partialSumSize };
+    size_t local[1] = { 1 };
+    checkError(clEnqueueNDRangeKernel(queue, kernel, 1, 0, global, local, 0, NULL, NULL), __LINE__);
+    FTYPE* partialSum = dvector(partialSumSize);
+    FTYPE* partialSum2 = dvector(partialSumSize);
+    checkError(clEnqueueReadBuffer(queue, partialSumBuf, CL_TRUE, 0, sizeof(FTYPE) * initPartialSumSize, partialSum, NULL, NULL, NULL));
+    checkError(clEnqueueReadBuffer(queue, partialSum2Buf, CL_TRUE, 0, sizeof(FTYPE) * initPartialSumSize, partialSum2, NULL, NULL, NULL));
 
+    // checkError(clEnqueueReadBuffer(queue, pdSwaptionPriceBuf, CL_FALSE, 0, sizeof(FTYPE) * 2, (void*)&swaptionPrices[(i - beg) * 2], NULL, NULL, NULL), __LINE__);
     clReleaseMemObject(ppdFactorsBuf);
     clReleaseMemObject(pdYieldBuf);
     clReleaseMemObject(pdSwaptionPriceBuf);
+    clReleaseMemObject(partialSumBuf);
+    clReleaseMemObject(partialSum2Buf);
+
+    clFinish(queue);
+
+    // reduction sum
+    FTYPE* dSumSimSwaptionPrice = dvector(global[0] / local[0]);
+    FTYPE* dSumSquareSimSwaptionPrice = dvector(global[0] / local[0]);
+
+    global[0] = partialSumSize;
+    local[0] = partialSumSize > 256 ? 256 : partialSumSize;
+
+    partialSumBuf = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(FTYPE) * partialSumSize, NULL, &err);
+    checkError(err);
+    partialSum2Buf = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(FTYPE) * partialSumSize, NULL, &err);
+    checkError(err);
+    cl_mem output1 = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(FTYPE) * (global[0] / local[0]), NULL, &err);
+    checkError(err);
+    cl_mem output2 = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(FTYPE) * (global[0] / local[0]), NULL, &err);
+    checkError(err);
+
+    checkError(clSetKernelArg(kernel_reduction, 0, sizeof(cl_mem), &partialSumBuf), __LINE__);
+    checkError(clSetKernelArg(kernel_reduction, 1, sizeof(cl_mem), &partialSum2Buf), __LINE__);
+    checkError(clSetKernelArg(kernel_reduction, 2, sizeof(FTYPE) * local[0], NULL), __LINE__);
+    checkError(clSetKernelArg(kernel_reduction, 3, sizeof(FTYPE) * local[0], NULL), __LINE__);
+    checkError(clSetKernelArg(kernel_reduction, 4, sizeof(cl_mem), &output1), __LINE__);
+    checkError(clSetKernelArg(kernel_reduction, 5, sizeof(cl_mem), &output2), __LINE__);
+
+    checkError(clEnqueueWriteBuffer(queue, partialSumBuf, CL_FALSE, 0, sizeof(FTYPE) * partialSumSize, partialSum, NULL, NULL, NULL), __LINE__);
+    checkError(clEnqueueWriteBuffer(queue, partialSum2Buf, CL_FALSE, 0, sizeof(FTYPE) * partialSumSize, partialSum2, NULL, NULL, NULL), __LINE__);
+    checkError(clEnqueueNDRangeKernel(queue, kernel_reduction, 1, 0, global, local, 0, NULL, NULL), __LINE__);
+
+    checkError(clEnqueueReadBuffer(queue, output1, CL_FALSE, 0, sizeof(FTYPE) * (global[0] / local[0]), dSumSimSwaptionPrice, NULL, NULL, NULL), __LINE__);
+    checkError(clEnqueueReadBuffer(queue, output2, CL_FALSE, 0, sizeof(FTYPE) * (global[0] / local[0]), dSumSquareSimSwaptionPrice, NULL, NULL, NULL), __LINE__);
+
+    clFinish(queue);
+
+    FTYPE t1 = 0.0, t2 = 0.0;
+    for(size_t j = 0; j < (global[0] / local[0]); j++) {
+      t1 += dSumSimSwaptionPrice[j];
+      t2 += dSumSquareSimSwaptionPrice[j];
+    }
+
+    swaptionPrices[(i - beg) * 2] = t1 / trials;
+    swaptionPrices[(i - beg) * 2 + 1] = sqrt((t2 - t1 * t1 / trials) / (trials - 1.0)) / sqrt((FTYPE)trials);
+
+    clReleaseMemObject(partialSumBuf);
+    clReleaseMemObject(partialSum2Buf);
+    clReleaseMemObject(output1);
+    clReleaseMemObject(output2);
+
+    free(partialSum);
+    free(partialSum2);
+    free(dSumSimSwaptionPrice);
+    free(dSumSquareSimSwaptionPrice);
   }
   for(size_t i = 0; i < device_count; i++) {
     clFinish(queues[i]);
@@ -362,6 +440,12 @@ int main(int argc, char *argv[])
 {
   int i;
   FTYPE *factors = NULL;
+#ifdef ENABLE_MPI
+  int rank;
+  MPI_Init(&argc, &argv);
+  MPI_Comm_size(MPI_COMM_WORLD, &nThreads);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#endif
 
 #ifdef PARSEC_VERSION
   printf("PARSEC Benchmark Suite\n");
@@ -369,7 +453,11 @@ int main(int argc, char *argv[])
 #endif //PARSEC_VERSION
 
   parseOpt(argc, argv);
+#ifdef ENABLE_MPI
+  if(rank == MASTER)
+#endif
   printf("Number of Simulations: %d,  Number of threads: %d Number of swaptions: %d\n", NUM_TRIALS, nThreads, nSwaptions);
+
 #ifdef ENABLE_THREADS
   pthread_t* threads;
   pthread_attr_t pthread_custom_attr;
@@ -409,10 +497,6 @@ int main(int argc, char *argv[])
 
   free(threads);
 #elif ENABLE_MPI
-  int rank;
-  MPI_Init(&argc, &argv);
-  MPI_Comm_size(MPI_COMM_WORLD, &nThreads);
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   worker(&rank);
 #else
   int threadID = 0;

@@ -129,7 +129,7 @@ void HJM_SimPath_Forward_Blocking(__local FTYPE *ppdHJMPath,
     __local FTYPE *pdForward,
     __local FTYPE *pdTotalDrift,
     __global FTYPE *ppdFactors,
-    long *lRndSeed,
+    long lRndSeed,
     int BLOCKSIZE,
 		__local FTYPE *pdZ, __local FTYPE *randZ) {	
   int i, j, l;
@@ -150,7 +150,7 @@ void HJM_SimPath_Forward_Blocking(__local FTYPE *ppdHJMPath,
   for(b = 0; b < BLOCKSIZE; b++){
     for(j = 1; j < iN; j++){
       for(l = 0; l < iFactors; l++){
-        randZ[l * iN * BLOCKSIZE + BLOCKSIZE * j + b] = RanUnif(lRndSeed);
+        randZ[l * iN * BLOCKSIZE + BLOCKSIZE * j + b] = RanUnif(&lRndSeed);
       }
     }
   }
@@ -211,8 +211,15 @@ __kernel void HJM_Swaption_Blocking(__global FTYPE *pdSwaptionPrice,
     __local FTYPE *ppdHJMPath, __local FTYPE *pdForward, __local FTYPE *ppdDrifts, __local FTYPE *pdTotalDrift,
     __local FTYPE *pdDiscountingRatePath, __local FTYPE *pdPayoffDiscountFactors, __local FTYPE *pdSwapRatePath, __local FTYPE *pdSwapDiscountFactors, __local FTYPE *pdSwapPayoffs,
     __local FTYPE *pdZ, __local FTYPE *randZ,
-    __local FTYPE *pdexpRes)
+    __local FTYPE *pdexpRes,
+    __global FTYPE *partialSum,
+    __global FTYPE *partialSum2,
+    const int id)
 {
+  uint globalId = get_global_id(0);
+  uint globalSize = get_global_size(0);
+  if(globalId * BLOCKSIZE >= lTrials) return;
+
   int i, b;
   long l;
 
@@ -232,7 +239,7 @@ __kernel void HJM_Swaption_Blocking(__global FTYPE *pdSwaptionPrice,
   FTYPE dFixedLegValue;
 
   // Accumulators
-  FTYPE dSumSimSwaptionPrice; 
+  FTYPE dSumSimSwaptionPrice;
   FTYPE dSumSquareSimSwaptionPrice;
 
   // Final returned results
@@ -260,43 +267,66 @@ __kernel void HJM_Swaption_Blocking(__global FTYPE *pdSwaptionPrice,
   dSumSimSwaptionPrice = 0.0;
   dSumSquareSimSwaptionPrice = 0.0;
 
+  long seed = lRndSeed + iFactors * (iN - 1) * BLOCKSIZE * globalId;
+
   //Simulations begin:
-  for(l = 0L; l < lTrials; l += (long)BLOCKSIZE) {
-    HJM_SimPath_Forward_Blocking(ppdHJMPath, iN, iFactors, dYears, pdForward, pdTotalDrift, ppdFactors, &lRndSeed, BLOCKSIZE, pdZ, randZ);
+  HJM_SimPath_Forward_Blocking(ppdHJMPath, iN, iFactors, dYears, pdForward, pdTotalDrift, ppdFactors, seed, BLOCKSIZE, pdZ, randZ);
 
-    for(i = 0; i < iN; i++){
-      for(b = 0; b < BLOCKSIZE; b++){
-        pdDiscountingRatePath[BLOCKSIZE*i + b] = ppdHJMPath[i * iN * BLOCKSIZE + b];
-      }
-    }
-
-    Discount_Factors_Blocking(pdPayoffDiscountFactors, iN, dYears, pdDiscountingRatePath, BLOCKSIZE, pdexpRes);
-
-    for(i = 0; i < iSwapVectorLength; i++){
-      for(b = 0; b < BLOCKSIZE; b++){
-        pdSwapRatePath[i * BLOCKSIZE + b] = ppdHJMPath[iSwapStartTimeIndex * iN * BLOCKSIZE + i * BLOCKSIZE + b];
-      }
-    }
-
-    Discount_Factors_Blocking(pdSwapDiscountFactors, iSwapVectorLength, dSwapVectorYears, pdSwapRatePath, BLOCKSIZE, pdexpRes);
-
+  for(i = 0; i < iN; i++){
     for(b = 0; b < BLOCKSIZE; b++){
-      dFixedLegValue = 0.0;
-
-      for(i = 0; i < iSwapVectorLength; i++) dFixedLegValue += pdSwapPayoffs[i] * pdSwapDiscountFactors[i*BLOCKSIZE + b];
-      dSwaptionPayoff = dMax(dFixedLegValue - 1.0, 0);
-
-      dDiscSwaptionPayoff = dSwaptionPayoff * pdPayoffDiscountFactors[iSwapStartTimeIndex*BLOCKSIZE + b];
-
-      dSumSimSwaptionPrice += dDiscSwaptionPayoff;
-      dSumSquareSimSwaptionPrice += dDiscSwaptionPayoff*dDiscSwaptionPayoff;
+      pdDiscountingRatePath[BLOCKSIZE*i + b] = ppdHJMPath[i * iN * BLOCKSIZE + b];
     }
   }
 
-  dSimSwaptionMeanPrice = dSumSimSwaptionPrice / lTrials;
-  dSimSwaptionStdError = sqrt((dSumSquareSimSwaptionPrice-dSumSimSwaptionPrice*dSumSimSwaptionPrice/lTrials)/
-      (lTrials-1.0))/sqrt((FTYPE)lTrials);
+  Discount_Factors_Blocking(pdPayoffDiscountFactors, iN, dYears, pdDiscountingRatePath, BLOCKSIZE, pdexpRes);
 
-  pdSwaptionPrice[0] = dSimSwaptionMeanPrice;
-  pdSwaptionPrice[1] = dSimSwaptionStdError;
+  for(i = 0; i < iSwapVectorLength; i++){
+    for(b = 0; b < BLOCKSIZE; b++){
+      pdSwapRatePath[i * BLOCKSIZE + b] = ppdHJMPath[iSwapStartTimeIndex * iN * BLOCKSIZE + i * BLOCKSIZE + b];
+    }
+  }
+
+  Discount_Factors_Blocking(pdSwapDiscountFactors, iSwapVectorLength, dSwapVectorYears, pdSwapRatePath, BLOCKSIZE, pdexpRes);
+
+  FTYPE t1 = 0.0, t2 = 0.0;
+  for(b = 0; b < BLOCKSIZE; b++){
+    dFixedLegValue = 0.0;
+
+    for(i = 0; i < iSwapVectorLength; i++) dFixedLegValue += pdSwapPayoffs[i] * pdSwapDiscountFactors[i*BLOCKSIZE + b];
+    dSwaptionPayoff = dMax(dFixedLegValue - 1.0, 0);
+
+    dDiscSwaptionPayoff = dSwaptionPayoff * pdPayoffDiscountFactors[iSwapStartTimeIndex*BLOCKSIZE + b];
+
+    t1 += dDiscSwaptionPayoff;
+    t2 += dDiscSwaptionPayoff * dDiscSwaptionPayoff;
+  }
+  partialSum[globalId] = t1;
+  partialSum2[globalId] = t2;
+}
+
+__kernel void reduction_sum(__global FTYPE* partialSum,
+    __global FTYPE* partialSum2,
+    __local FTYPE* localSums1,
+    __local FTYPE* localSums2,
+    __global FTYPE* output1,
+    __global FTYPE* output2) {
+  uint globalId = get_global_id(0);
+  uint globalSize = get_global_size(0);
+  uint localId = get_local_id(0);
+  uint groupSize = get_local_size(0);
+
+  localSums1[localId] = partialSum[globalId];
+  localSums2[localId] = partialSum2[globalId];
+  for(uint stride = groupSize / 2; stride > 0; stride >>= 1) {
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if(localId < stride) {
+      localSums1[localId] += localSums1[localId + stride];
+      localSums2[localId] += localSums2[localId + stride];
+    }
+  }
+
+  if(localId == 0) {
+    output1[get_group_id(0)] = localSums1[0];
+    output2[get_group_id(0)] = localSums2[0];
+  }
 }
