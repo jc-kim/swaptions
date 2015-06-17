@@ -1,6 +1,6 @@
 DEF =
 INCLUDE =
-CXXFLAGS := $(CXXFLAGS) -g -Wall
+CXXFLAGS := $(CXXFLAGS) -g -Wall -O4
 
 EXEC = swaptions 
 ALL_EXEC = swaptions swaptions_cpu swaptions_gpu swaptions_mpi swaptions_snucl
@@ -36,7 +36,7 @@ ifdef version
 		ifeq "$(version)" "mpi"
 			LDFLAGS := $(LDFLAGS) -lOpenCL
 			CXX := mpic++
-			DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_CPU -DENABLE_MPI
+			DEF := $(DEF) -DENABLE_OPENCL -DENABLE_MPI
 			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
 				HJM_Securities_mpi.o

@@ -218,7 +218,7 @@ __kernel void HJM_Swaption_Blocking(__global FTYPE *pdSwaptionPrice,
 {
   uint globalId = get_global_id(0);
   uint globalSize = get_global_size(0);
-  if(globalId * BLOCKSIZE >= lTrials) return;
+  if(globalId >= lTrials / BLOCKSIZE) return;
 
   int i, b;
   long l;

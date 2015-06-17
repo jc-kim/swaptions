@@ -192,7 +192,7 @@ void* worker(void *arg){
     checkError(clEnqueueWriteBuffer(queue, ppdFactorsBuf, CL_TRUE, 0, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), swaptions[i].ppdFactors, NULL, NULL, NULL));
 
     size_t global[1] = { partialSumSize };
-    size_t local[1] = { 1 };
+    size_t local[1] = { partialSumSize > 64 ? 64 : partialSumSize };
     checkError(clEnqueueNDRangeKernel(queue, kernel, 1, 0, global, local, 0, NULL, NULL), __LINE__);
     FTYPE* partialSum = dvector(partialSumSize);
     FTYPE* partialSum2 = dvector(partialSumSize);
@@ -474,10 +474,12 @@ int main(int argc, char *argv[])
     exit(1);
   }
 #else
+#ifndef ENABLE_MPI
   if (nThreads != 1) {
     fprintf(stderr,"Number of threads must be 1 (serial version)\n");
     exit(1);
   }
+#endif
 #endif
 
   factors = getFactors();
