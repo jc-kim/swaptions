@@ -1,0 +1,3 @@
+#!/bin/sh
+
+thorq --add --device gpu ./swaptions_gpu -ns 128 -sm 1000000

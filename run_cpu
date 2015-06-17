@@ -1,0 +1,3 @@
+#!/bin/sh
+
+thorq --add ./swaptions_cpu -ns 128 -sm 1000000

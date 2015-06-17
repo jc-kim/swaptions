@@ -9,6 +9,9 @@ OBJS= CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 	HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
 	HJM_Securities.o
 
+ALL_OBJS= $(OBJS) HJM_Securities_cpu.o HJM_Securities_gpu.o \
+					HJM_Securities_mpi.o HJM_Securities_snucl.o
+
 ifdef version
   ifeq "$(version)" "pthreads" 
     DEF := $(DEF) -DENABLE_THREADS
@@ -17,20 +20,33 @@ ifdef version
 		LDFLAGS := $(LDFLAGS) -lOpenCL
 		ifeq "$(version)" "cpu"
 			DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_CPU
-			EXEC := run_cpu
+			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
+				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
+				HJM_Securities_cpu.o
+			EXEC := swaptions_cpu
 		endif
 		ifeq "$(version)" "gpu"
 			DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_GPU
-			EXEC := run_gpu
+			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
+				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
+				HJM_Securities_gpu.o
+			EXEC := swaptions_gpu
 		endif
 		ifeq "$(version)" "mpi"
-			CXX := mpig++
+			CXX := mpic++
 			DEF := $(DEF) -DENABLE_OPENCL -DENABLE_MPI
-			EXEC := run_mpi
+			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
+				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
+				HJM_Securities_mpi.o
+			EXEC := swaptions_mpi
 		endif
 		ifeq "$(version)" "snucl"
+			CXX := mpic++
 			DEF := $(DEF) -DENABLE_OPENCL -DENABLE_SNUCL
-			EXEC := run_snucl
+			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
+				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
+				HJM_Securities_snucl.o
+			EXEC := swaptions_snucl
 		endif
 	endif
 endif
@@ -46,6 +62,17 @@ $(EXEC): $(OBJS)
 .c.o:
 	$(CXX) $(CXXFLAGS) $(DEF) -c $*.c -o $*.o
 
-clean:
-	rm -f $(OBJS) $(ALL_EXEC)
+HJM_Securities_cpu.o: HJM_Securities.cpp
+	$(CXX) $(CXXFLAGS) $(DEF) -c $^ -o $@
 
+HJM_Securities_gpu.o: HJM_Securities.cpp
+	$(CXX) $(CXXFLAGS) $(DEF) -c $^ -o $@
+
+HJM_Securities_mpi.o: HJM_Securities.cpp
+	$(CXX) $(CXXFLAGS) $(DEF) -c $^ -o $@
+
+HJM_Securities_snucl.o: HJM_Securities.cpp
+	$(CXX) $(CXXFLAGS) $(DEF) -c $^ -o $@
+
+clean:
+	rm -f $(ALL_OBJS) $(ALL_EXEC)
