@@ -27,6 +27,12 @@
 #define MASTER 0
 #endif
 
+#define checkError(err)                                    \
+  if (err != CL_SUCCESS) {                                 \
+    printf("[%s:%d] error %d\n", __FILE__, __LINE__, err); \
+    exit(EXIT_FAILURE);                                    \
+  }
+
 int NUM_TRIALS = DEFAULT_NUM_TRIALS;
 int nThreads = 1;
 int nSwaptions = 1;
@@ -50,20 +56,6 @@ char* getKernelSrc() {
   fclose(fp);
 
   return result;
-}
-
-void checkError(cl_int err) {
-  if(err != CL_SUCCESS) {
-    printf("Error occured! %d\n", err);
-    exit(1);
-  }
-}
-
-void checkError(cl_int err, int line_no) {
-  if(err != CL_SUCCESS) {
-    printf("Error occured in line %d!: %d\n", line_no, err);
-    exit(1);
-  }
 }
 #endif
 
@@ -151,55 +143,55 @@ void* worker(void *arg){
     cl_mem ppdFactorsBuf = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), NULL, &err);
     checkError(err);
     cl_mem partialSumBuf = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(FTYPE) * initPartialSumSize, NULL, &err);
-    checkError(err, __LINE__);
+    checkError(err);
     cl_mem partialSum2Buf = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(FTYPE) * initPartialSumSize, NULL, &err);
-    checkError(err, __LINE__);
+    checkError(err);
     long lRndSeed = 100;
     long trials = NUM_TRIALS;
 
-    checkError(clSetKernelArg(kernel, 0, sizeof(cl_mem), &pdSwaptionPriceBuf), __LINE__);
-    checkError(clSetKernelArg(kernel, 1, sizeof(FTYPE), &swaptions[i].dStrike), __LINE__);
-    checkError(clSetKernelArg(kernel, 2, sizeof(FTYPE), &swaptions[i].dCompounding), __LINE__);
-    checkError(clSetKernelArg(kernel, 3, sizeof(FTYPE), &swaptions[i].dMaturity), __LINE__);
-    checkError(clSetKernelArg(kernel, 4, sizeof(FTYPE), &swaptions[i].dTenor), __LINE__);
-    checkError(clSetKernelArg(kernel, 5, sizeof(FTYPE), &swaptions[i].dPaymentInterval), __LINE__);
-    checkError(clSetKernelArg(kernel, 6, sizeof(int), &swaptions[i].iN), __LINE__);
-    checkError(clSetKernelArg(kernel, 7, sizeof(int), &swaptions[i].iFactors), __LINE__);
-    checkError(clSetKernelArg(kernel, 8, sizeof(FTYPE), &swaptions[i].dYears), __LINE__);
-    checkError(clSetKernelArg(kernel, 9, sizeof(cl_mem), &pdYieldBuf), __LINE__);
-    checkError(clSetKernelArg(kernel, 10, sizeof(cl_mem), &ppdFactorsBuf), __LINE__);
-    checkError(clSetKernelArg(kernel, 11, sizeof(long), &lRndSeed), __LINE__);
-    checkError(clSetKernelArg(kernel, 12, sizeof(long), &trials), __LINE__);
-    checkError(clSetKernelArg(kernel, 13, sizeof(int), &BLOCKSIZE), __LINE__);
-    checkError(clSetKernelArg(kernel, 14, sizeof(int), &tid), __LINE__);
-    checkError(clSetKernelArg(kernel, 15, sizeof(FTYPE) * swaptions[i].iN * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // ppdHJMPath
-    checkError(clSetKernelArg(kernel, 16, sizeof(FTYPE) * swaptions[i].iN, NULL), __LINE__); // pdForward
-    checkError(clSetKernelArg(kernel, 17, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), NULL), __LINE__); // ppdDrifts
-    checkError(clSetKernelArg(kernel, 18, sizeof(FTYPE) * (swaptions[i].iN - 1), NULL), __LINE__); // pdTotalDrift
-    checkError(clSetKernelArg(kernel, 19, sizeof(FTYPE) * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // pdDiscountingRatePath
-    checkError(clSetKernelArg(kernel, 20, sizeof(FTYPE) * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // pdPayoffDiscountFactors
-    checkError(clSetKernelArg(kernel, 21, sizeof(FTYPE) * iSwapVectorLength * BLOCK_SIZE, NULL), __LINE__); // pdSwapRatePath
-    checkError(clSetKernelArg(kernel, 22, sizeof(FTYPE) * iSwapVectorLength * BLOCK_SIZE, NULL), __LINE__); // pdSwapDiscountFactors
-    checkError(clSetKernelArg(kernel, 23, sizeof(FTYPE) * iSwapVectorLength, NULL), __LINE__); // pdSwapPayoffs
-    checkError(clSetKernelArg(kernel, 24, sizeof(FTYPE) * swaptions[i].iFactors * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // pdZ
-    checkError(clSetKernelArg(kernel, 25, sizeof(FTYPE) * swaptions[i].iFactors * swaptions[i].iN * BLOCK_SIZE, NULL), __LINE__); // randZ
-    checkError(clSetKernelArg(kernel, 26, sizeof(FTYPE) * (swaptions[i].iN - 1) * BLOCK_SIZE, NULL), __LINE__); // pdexpRes
-    checkError(clSetKernelArg(kernel, 27, sizeof(cl_mem), &partialSumBuf), __LINE__);
-    checkError(clSetKernelArg(kernel, 28, sizeof(cl_mem), &partialSum2Buf), __LINE__);
-    checkError(clSetKernelArg(kernel, 29, sizeof(cl_int), &swaptions[i].Id), __LINE__);
+    checkError(clSetKernelArg(kernel, 0, sizeof(cl_mem), &pdSwaptionPriceBuf));
+    checkError(clSetKernelArg(kernel, 1, sizeof(FTYPE), &swaptions[i].dStrike));
+    checkError(clSetKernelArg(kernel, 2, sizeof(FTYPE), &swaptions[i].dCompounding));
+    checkError(clSetKernelArg(kernel, 3, sizeof(FTYPE), &swaptions[i].dMaturity));
+    checkError(clSetKernelArg(kernel, 4, sizeof(FTYPE), &swaptions[i].dTenor));
+    checkError(clSetKernelArg(kernel, 5, sizeof(FTYPE), &swaptions[i].dPaymentInterval));
+    checkError(clSetKernelArg(kernel, 6, sizeof(int), &swaptions[i].iN));
+    checkError(clSetKernelArg(kernel, 7, sizeof(int), &swaptions[i].iFactors));
+    checkError(clSetKernelArg(kernel, 8, sizeof(FTYPE), &swaptions[i].dYears));
+    checkError(clSetKernelArg(kernel, 9, sizeof(cl_mem), &pdYieldBuf));
+    checkError(clSetKernelArg(kernel, 10, sizeof(cl_mem), &ppdFactorsBuf));
+    checkError(clSetKernelArg(kernel, 11, sizeof(long), &lRndSeed));
+    checkError(clSetKernelArg(kernel, 12, sizeof(long), &trials));
+    checkError(clSetKernelArg(kernel, 13, sizeof(int), &BLOCKSIZE));
+    checkError(clSetKernelArg(kernel, 14, sizeof(int), &tid));
+    checkError(clSetKernelArg(kernel, 15, sizeof(FTYPE) * swaptions[i].iN * swaptions[i].iN * BLOCK_SIZE, NULL)); // ppdHJMPath
+    checkError(clSetKernelArg(kernel, 16, sizeof(FTYPE) * swaptions[i].iN, NULL)); // pdForward
+    checkError(clSetKernelArg(kernel, 17, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), NULL)); // ppdDrifts
+    checkError(clSetKernelArg(kernel, 18, sizeof(FTYPE) * (swaptions[i].iN - 1), NULL)); // pdTotalDrift
+    checkError(clSetKernelArg(kernel, 19, sizeof(FTYPE) * swaptions[i].iN * BLOCK_SIZE, NULL)); // pdDiscountingRatePath
+    checkError(clSetKernelArg(kernel, 20, sizeof(FTYPE) * swaptions[i].iN * BLOCK_SIZE, NULL)); // pdPayoffDiscountFactors
+    checkError(clSetKernelArg(kernel, 21, sizeof(FTYPE) * iSwapVectorLength * BLOCK_SIZE, NULL)); // pdSwapRatePath
+    checkError(clSetKernelArg(kernel, 22, sizeof(FTYPE) * iSwapVectorLength * BLOCK_SIZE, NULL)); // pdSwapDiscountFactors
+    checkError(clSetKernelArg(kernel, 23, sizeof(FTYPE) * iSwapVectorLength, NULL)); // pdSwapPayoffs
+    checkError(clSetKernelArg(kernel, 24, sizeof(FTYPE) * swaptions[i].iFactors * swaptions[i].iN * BLOCK_SIZE, NULL)); // pdZ
+    checkError(clSetKernelArg(kernel, 25, sizeof(FTYPE) * swaptions[i].iFactors * swaptions[i].iN * BLOCK_SIZE, NULL)); // randZ
+    checkError(clSetKernelArg(kernel, 26, sizeof(FTYPE) * (swaptions[i].iN - 1) * BLOCK_SIZE, NULL)); // pdexpRes
+    checkError(clSetKernelArg(kernel, 27, sizeof(cl_mem), &partialSumBuf));
+    checkError(clSetKernelArg(kernel, 28, sizeof(cl_mem), &partialSum2Buf));
+    checkError(clSetKernelArg(kernel, 29, sizeof(cl_int), &swaptions[i].Id));
 
     checkError(clEnqueueWriteBuffer(queue, pdYieldBuf, CL_TRUE, 0, sizeof(FTYPE) * swaptions[i].iN, swaptions[i].pdYield, NULL, NULL, NULL));
     checkError(clEnqueueWriteBuffer(queue, ppdFactorsBuf, CL_TRUE, 0, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), swaptions[i].ppdFactors, NULL, NULL, NULL));
 
     size_t global[1] = { partialSumSize };
-    size_t local[1] = { partialSumSize > 64 ? 64 : partialSumSize };
-    checkError(clEnqueueNDRangeKernel(queue, kernel, 1, 0, global, local, 0, NULL, NULL), __LINE__);
+		size_t local[1] = { 1 };
+    checkError(clEnqueueNDRangeKernel(queue, kernel, 1, 0, global, local, 0, NULL, NULL));
     FTYPE* partialSum = dvector(partialSumSize);
     FTYPE* partialSum2 = dvector(partialSumSize);
     checkError(clEnqueueReadBuffer(queue, partialSumBuf, CL_TRUE, 0, sizeof(FTYPE) * initPartialSumSize, partialSum, NULL, NULL, NULL));
     checkError(clEnqueueReadBuffer(queue, partialSum2Buf, CL_TRUE, 0, sizeof(FTYPE) * initPartialSumSize, partialSum2, NULL, NULL, NULL));
 
-    // checkError(clEnqueueReadBuffer(queue, pdSwaptionPriceBuf, CL_FALSE, 0, sizeof(FTYPE) * 2, (void*)&swaptionPrices[(i - beg) * 2], NULL, NULL, NULL), __LINE__);
+    // checkError(clEnqueueReadBuffer(queue, pdSwaptionPriceBuf, CL_FALSE, 0, sizeof(FTYPE) * 2, (void*)&swaptionPrices[(i - beg) * 2], NULL, NULL, NULL));
     clReleaseMemObject(ppdFactorsBuf);
     clReleaseMemObject(pdYieldBuf);
     clReleaseMemObject(pdSwaptionPriceBuf);
@@ -224,19 +216,19 @@ void* worker(void *arg){
     cl_mem output2 = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(FTYPE) * (global[0] / local[0]), NULL, &err);
     checkError(err);
 
-    checkError(clSetKernelArg(kernel_reduction, 0, sizeof(cl_mem), &partialSumBuf), __LINE__);
-    checkError(clSetKernelArg(kernel_reduction, 1, sizeof(cl_mem), &partialSum2Buf), __LINE__);
-    checkError(clSetKernelArg(kernel_reduction, 2, sizeof(FTYPE) * local[0], NULL), __LINE__);
-    checkError(clSetKernelArg(kernel_reduction, 3, sizeof(FTYPE) * local[0], NULL), __LINE__);
-    checkError(clSetKernelArg(kernel_reduction, 4, sizeof(cl_mem), &output1), __LINE__);
-    checkError(clSetKernelArg(kernel_reduction, 5, sizeof(cl_mem), &output2), __LINE__);
+    checkError(clSetKernelArg(kernel_reduction, 0, sizeof(cl_mem), &partialSumBuf));
+    checkError(clSetKernelArg(kernel_reduction, 1, sizeof(cl_mem), &partialSum2Buf));
+    checkError(clSetKernelArg(kernel_reduction, 2, sizeof(FTYPE) * local[0], NULL));
+    checkError(clSetKernelArg(kernel_reduction, 3, sizeof(FTYPE) * local[0], NULL));
+    checkError(clSetKernelArg(kernel_reduction, 4, sizeof(cl_mem), &output1));
+    checkError(clSetKernelArg(kernel_reduction, 5, sizeof(cl_mem), &output2));
 
-    checkError(clEnqueueWriteBuffer(queue, partialSumBuf, CL_FALSE, 0, sizeof(FTYPE) * partialSumSize, partialSum, NULL, NULL, NULL), __LINE__);
-    checkError(clEnqueueWriteBuffer(queue, partialSum2Buf, CL_FALSE, 0, sizeof(FTYPE) * partialSumSize, partialSum2, NULL, NULL, NULL), __LINE__);
-    checkError(clEnqueueNDRangeKernel(queue, kernel_reduction, 1, 0, global, local, 0, NULL, NULL), __LINE__);
+    checkError(clEnqueueWriteBuffer(queue, partialSumBuf, CL_FALSE, 0, sizeof(FTYPE) * partialSumSize, partialSum, NULL, NULL, NULL));
+    checkError(clEnqueueWriteBuffer(queue, partialSum2Buf, CL_FALSE, 0, sizeof(FTYPE) * partialSumSize, partialSum2, NULL, NULL, NULL));
+    checkError(clEnqueueNDRangeKernel(queue, kernel_reduction, 1, 0, global, local, 0, NULL, NULL));
 
-    checkError(clEnqueueReadBuffer(queue, output1, CL_FALSE, 0, sizeof(FTYPE) * (global[0] / local[0]), dSumSimSwaptionPrice, NULL, NULL, NULL), __LINE__);
-    checkError(clEnqueueReadBuffer(queue, output2, CL_FALSE, 0, sizeof(FTYPE) * (global[0] / local[0]), dSumSquareSimSwaptionPrice, NULL, NULL, NULL), __LINE__);
+    checkError(clEnqueueReadBuffer(queue, output1, CL_FALSE, 0, sizeof(FTYPE) * (global[0] / local[0]), dSumSimSwaptionPrice, NULL, NULL, NULL));
+    checkError(clEnqueueReadBuffer(queue, output2, CL_FALSE, 0, sizeof(FTYPE) * (global[0] / local[0]), dSumSquareSimSwaptionPrice, NULL, NULL, NULL));
 
     clFinish(queue);
 
