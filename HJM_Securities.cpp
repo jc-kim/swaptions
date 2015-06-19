@@ -151,8 +151,6 @@ void* worker(void *arg){
     long lRndSeed = 100;
     long trials = NUM_TRIALS;
 
-    FTYPE* partialSum = dvector(partialSumSize);
-    FTYPE* partialSum2 = dvector(partialSumSize);
 
     checkError(clSetKernelArg(kernel, 0, sizeof(cl_mem), &pdSwaptionPriceBuf));
     checkError(clSetKernelArg(kernel, 1, sizeof(FTYPE), &swaptions[i].dStrike));
@@ -187,14 +185,16 @@ void* worker(void *arg){
 
     checkError(clEnqueueWriteBuffer(queue, pdYieldBuf, CL_TRUE, 0, sizeof(FTYPE) * swaptions[i].iN, swaptions[i].pdYield, NULL, NULL, NULL));
     checkError(clEnqueueWriteBuffer(queue, ppdFactorsBuf, CL_TRUE, 0, sizeof(FTYPE) * swaptions[i].iFactors * (swaptions[i].iN - 1), swaptions[i].ppdFactors, NULL, NULL, NULL));
+
+    // 이 변수는 초기화하는 용도로만 쓴다
+    FTYPE* partialSum = dvector(partialSumSize);
     checkError(clEnqueueWriteBuffer(queue, partialSumBuf, CL_TRUE, 0, sizeof(FTYPE) * partialSumSize, partialSum, NULL, NULL, NULL));
-    checkError(clEnqueueWriteBuffer(queue, partialSum2Buf, CL_TRUE, 0, sizeof(FTYPE) * partialSumSize, partialSum2, NULL, NULL, NULL));
+    checkError(clEnqueueWriteBuffer(queue, partialSum2Buf, CL_TRUE, 0, sizeof(FTYPE) * partialSumSize, partialSum, NULL, NULL, NULL));
+    free(partialSum);
 
     size_t global[1] = { partialSumSize };
     size_t local[1] = { partialSumSize > 64 ? 64 : partialSumSize };
     checkError(clEnqueueNDRangeKernel(queue, kernel, 1, 0, global, local, 0, NULL, NULL));
-    checkError(clEnqueueReadBuffer(queue, partialSumBuf, CL_TRUE, 0, sizeof(FTYPE) * partialSumSize, partialSum, NULL, NULL, NULL));
-    checkError(clEnqueueReadBuffer(queue, partialSum2Buf, CL_TRUE, 0, sizeof(FTYPE) * partialSumSize, partialSum2, NULL, NULL, NULL));
 
     // checkError(clEnqueueReadBuffer(queue, pdSwaptionPriceBuf, CL_FALSE, 0, sizeof(FTYPE) * 2, (void*)&swaptionPrices[(i - beg) * 2], NULL, NULL, NULL));
     clReleaseMemObject(ppdFactorsBuf);
@@ -230,8 +230,6 @@ void* worker(void *arg){
     clReleaseMemObject(output1);
     clReleaseMemObject(output2);
 
-    free(partialSum);
-    free(partialSum2);
     free(dSumSimSwaptionPrice);
     free(dSumSquareSimSwaptionPrice);
   }
