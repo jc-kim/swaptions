@@ -13,6 +13,7 @@
 #include "HJM.h"
 #include "HJM_Securities.h"
 #include "HJM_type.h"
+#include "timers.h"
 
 #ifdef ENABLE_THREADS
 #include <pthread.h>
@@ -470,6 +471,7 @@ int main(int argc, char *argv[])
   initSwaption(factors);
   free(factors);
 
+	timer_start(1);
   // Calling the Swaption Pricing Routine
 #ifdef ENABLE_THREADS
   int threadIDs[nThreads];
@@ -500,6 +502,9 @@ int main(int argc, char *argv[])
   }
   MPI_Finalize();
 #endif
+	timer_stop(1);
+
+	printf("Time elapsed: %lf sec\n", timer_read(1));
 
   for (i = 0; i < nSwaptions; i++) {
     free(swaptions[i].pdYield);

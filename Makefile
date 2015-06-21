@@ -7,7 +7,7 @@ ALL_EXEC = swaptions swaptions_cpu swaptions_gpu swaptions_mpi swaptions_snucl
 
 OBJS= CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 	HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
-	HJM_Securities.o
+	HJM_Securities.o timers.o
 
 ALL_OBJS= $(OBJS) HJM_Securities_cpu.o HJM_Securities_gpu.o \
 					HJM_Securities_mpi.o HJM_Securities_snucl.o
@@ -22,7 +22,7 @@ ifdef version
 			DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_CPU
 			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
-				HJM_Securities_cpu.o
+				HJM_Securities_cpu.o timers.o
 			EXEC := swaptions_cpu
 		endif
 		ifeq "$(version)" "gpu"
@@ -30,7 +30,7 @@ ifdef version
 			DEF := $(DEF) -DENABLE_OPENCL -DDEVICE_GPU
 			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
-				HJM_Securities_gpu.o
+				HJM_Securities_gpu.o timers.o
 			EXEC := swaptions_gpu
 		endif
 		ifeq "$(version)" "mpi"
@@ -39,7 +39,7 @@ ifdef version
 			DEF := $(DEF) -DENABLE_OPENCL -DENABLE_MPI
 			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
-				HJM_Securities_mpi.o
+				HJM_Securities_mpi.o timers.o
 			EXEC := swaptions_mpi
 		endif
 		ifeq "$(version)" "snucl"
@@ -47,7 +47,7 @@ ifdef version
 			DEF := $(DEF) -DENABLE_OPENCL -DENABLE_SNUCL
 			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
 				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
-				HJM_Securities_snucl.o
+				HJM_Securities_snucl.o timers.o
 			EXEC := swaptions_snucl
 			INCLUDE := $(INCLUDE) -I$(SNUCLROOT)/inc
 			LDLIBS := $(LDLIBS) -L$(SNUCLROOT)/lib 
