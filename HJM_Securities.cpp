@@ -41,7 +41,7 @@ int iN = 11;
 FTYPE dYears = 5.5; 
 int iFactors = 3; 
 parm *swaptions = NULL;
-
+int MAX_DEV = 16;
 #ifdef ENABLE_OPENCL
 char* getKernelSrc() {
   FILE* fp = fopen("kernel.cl", "r");
@@ -91,6 +91,7 @@ void* worker(void *arg){
 
   checkError(clGetPlatformIDs(1, &platform, NULL));
   checkError(clGetDeviceIDs(platform, device_type, NULL, NULL, &device_count));
+  device_count = device_count > MAX_DEV ? MAX_DEV : device_count;
   devices = (cl_device_id*)malloc(sizeof(cl_device_id) * device_count);
   checkError(clGetDeviceIDs(platform, device_type, device_count, devices, NULL));
   context = clCreateContext(NULL, device_count, devices, NULL, NULL, &err);
@@ -372,6 +373,7 @@ void parseOpt(int argc, char** argv) {
     if (!strcmp("-sm", argv[j])) {NUM_TRIALS = atol(argv[++j]);}
     else if (!strcmp("-nt", argv[j])) {nThreads = atoi(argv[++j]);} 
     else if (!strcmp("-ns", argv[j])) {nSwaptions = atoi(argv[++j]);} 
+    else if (!strcmp("-md", argv[j])) {MAX_DEV = atoi(argv[++j]);}
     else {
       fprintf(stderr," usage: \n\t-ns [number of swaptions (should be > number of threads]\n\t-sm [number of simulations]\n\t-nt [number of threads]\n"); 
     }
