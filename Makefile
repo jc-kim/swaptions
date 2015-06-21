@@ -53,6 +53,17 @@ ifdef version
 			LDLIBS := $(LDLIBS) -L$(SNUCLROOT)/lib 
 			LDFLAGS := $(LDFLAGS) -lsnucl_cluster
 		endif
+		ifeq "$(version)" "snucl_no_reduc"
+			CXX := mpic++
+			DEF := $(DEF) -DENABLE_OPENCL -DENABLE_SNUCL -DNON_REDUCTION
+			OBJS := CumNormalInv.o MaxFunction.o RanUnif.o nr_routines.o \
+				HJM_SimPath_Forward_Blocking.o HJM.o HJM_Swaption_Blocking.o  \
+				HJM_Securities_snucl_without_reduc.o timers.o
+			EXEC := swaptions_snucl_no_reduc
+			INCLUDE := $(INCLUDE) -I$(SNUCLROOT)/inc
+			LDLIBS := $(LDLIBS) -L$(SNUCLROOT)/lib 
+			LDFLAGS := $(LDFLAGS) -lsnucl_cluster
+		endif
 	endif
 endif
 
@@ -77,6 +88,9 @@ HJM_Securities_mpi.o: HJM_Securities.cpp
 	$(CXX) $(CXXFLAGS) $(DEF) -c $^ -o $@
 
 HJM_Securities_snucl.o: HJM_Securities.cpp
+	$(CXX) $(CXXFLAGS) $(DEF) -c $^ -o $@
+
+HJM_Securities_snucl_without_reduc.o: HJM_Securities.cpp
 	$(CXX) $(CXXFLAGS) $(DEF) -c $^ -o $@
 
 clean:

@@ -330,3 +330,20 @@ __kernel void reduction_sum(__global FTYPE* partialSum,
     output2[get_group_id(0)] = localSums2[0];
   }
 }
+
+__kernel void non_reduction_sum(__global FTYPE* partialSum,
+		__global FTYPE* partialSum2,
+		__global FTYPE* output1,
+		__global FTYPE* output2,
+		int len,
+		long lTrials) {
+	int i;
+	FTYPE o1, o2;
+	for(i = 0; i < len; i++) {
+		o1 += partialSum[i];
+		o2 += partialSum2[i];
+	}
+	
+	*output1 = o1 / lTrials;
+	*output2 = sqrt((o2 - o1 * o1 / lTrials) / (lTrials - 1)) / sqrt((FTYPE)lTrials);
+}

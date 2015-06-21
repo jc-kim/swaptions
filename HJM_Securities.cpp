@@ -118,7 +118,11 @@ void* worker(void *arg){
   kernel = clCreateKernel(program, "HJM_Swaption_Blocking", &err);
   checkError(err);
 
+#ifndef NON_REDUCTION
   kernel_reduction = clCreateKernel(program, "reduction_sum", &err);
+#else
+  kernel_reduction = clCreateKernel(program, "non_reduction_sum", &err);
+#endif
   checkError(err);
 
   queues = (cl_command_queue*)malloc(sizeof(cl_command_queue) * device_count);
@@ -203,6 +207,7 @@ void* worker(void *arg){
     clReleaseMemObject(pdSwaptionPriceBuf);
 
     // reduction sum
+#ifndef NON_REDUCTION
     global[0] = partialSumSize;
     local[0] = partialSumSize > 256 ? 256 : partialSumSize;
 
@@ -233,10 +238,36 @@ void* worker(void *arg){
 
     free(dSumSimSwaptionPrice);
     free(dSumSquareSimSwaptionPrice);
+#else
+    global[0] = 1;
+    local[0] = 1;
+    int arraylen = (int)((double)NUM_TRIALS / BLOCK_SIZE);
+    cl_mem output1 = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(FTYPE), NULL, &err);
+    checkError(err);
+    cl_mem output2 = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(FTYPE), NULL, &err);
+    checkError(err);
+
+    checkError(clSetKernelArg(kernel_reduction, 0, sizeof(cl_mem), &partialSumBuf));
+    checkError(clSetKernelArg(kernel_reduction, 1, sizeof(cl_mem), &partialSum2Buf));
+    checkError(clSetKernelArg(kernel_reduction, 2, sizeof(cl_mem), &output1));
+    checkError(clSetKernelArg(kernel_reduction, 3, sizeof(cl_mem), &output2));
+    checkError(clSetKernelArg(kernel_reduction, 4, sizeof(cl_int), &arraylen));
+    checkError(clSetKernelArg(kernel_reduction, 5, sizeof(cl_long), &trials));
+
+    checkError(clEnqueueNDRangeKernel(queue, kernel_reduction, 1, 0, global, local, 0, NULL, NULL));
+    checkError(clEnqueueReadBuffer(queue, output1, CL_FALSE, 0, sizeof(FTYPE), &swaptionPrices[i * 2], NULL, NULL, NULL));
+    checkError(clEnqueueReadBuffer(queue, output2, CL_FALSE, 0, sizeof(FTYPE), &swaptionPrices[i * 2 + 1], NULL, NULL, NULL));
+
+    clReleaseMemObject(partialSumBuf);
+    clReleaseMemObject(partialSum2Buf);
+    clReleaseMemObject(output1);
+    clReleaseMemObject(output2);
+#endif
   }
   for(size_t i = 0; i < device_count; i++) {
     clFinish(queues[i]);
   }
+#ifndef NON_REDUCTION
   for(i = 0; i < chunksize; i++) {
     FTYPE t1 = 0.0, t2 = 0.0;
     for(int j = 0; j < reductionSumSize; j++) {
@@ -247,6 +278,7 @@ void* worker(void *arg){
     swaptionPrices[i * 2 + 1] = sqrt((t2 - t1 * t1 / NUM_TRIALS) / (NUM_TRIALS - 1.0)) / sqrt((FTYPE)NUM_TRIALS);
   }
   free(reductionSums);
+#endif
 
 #ifdef ENABLE_MPI
   FTYPE* totalSwaptionPrices = (FTYPE*)malloc(sizeof(FTYPE) * nSwaptions * 2);
@@ -471,7 +503,7 @@ int main(int argc, char *argv[])
   initSwaption(factors);
   free(factors);
 
-	timer_start(1);
+  timer_start(1);
   // Calling the Swaption Pricing Routine
 #ifdef ENABLE_THREADS
   int threadIDs[nThreads];
@@ -502,9 +534,9 @@ int main(int argc, char *argv[])
   }
   MPI_Finalize();
 #endif
-	timer_stop(1);
+  timer_stop(1);
 
-	printf("Time elapsed: %lf sec\n", timer_read(1));
+  printf("Time elapsed: %lf sec\n", timer_read(1));
 
   for (i = 0; i < nSwaptions; i++) {
     free(swaptions[i].pdYield);
